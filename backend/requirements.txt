@@ -1,0 +1,22 @@
+# Web Framework & Server
+fastapi>=0.115.0,<0.165.0
+uvicorn[standard]>=0.30.0,<1.0.0
+python-multipart>=0.0.12,<1.0.0
+
+# Database & Async SQLite ORM
+sqlalchemy[asyncio]>=2.0.35,<2.2.0
+aiosqlite>=0.20.0,<1.0.0
+greenlet>=3.0.0
+
+
+# Data Validation & Settings (Pydantic v2)
+pydantic>=2.9.0,<3.0.0
+pydantic-settings>=2.5.0,<3.0.0
+
+# AI Extraction (Google Next-Gen GenAI SDK)
+google-genai>=1.0.0,<3.0.0
+
+# Testing & Quality
+pytest>=8.3.0,<10.0.0
+pytest-asyncio>=0.24.0,<2.0.0
+httpx>=0.27.0,<1.0.0
