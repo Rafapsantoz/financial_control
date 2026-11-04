@@ -7,6 +7,13 @@ from app.schemas.transaction import (
     TransactionUpdate,
     TransactionResponse,
 )
+from app.schemas.invoice import (
+    ExtractedInvoiceItem,
+    ExtractedInvoiceResponse,
+    InvoiceConfirmItem,
+    InvoiceConfirmRequest,
+    InvoiceConfirmResponse,
+)
 
 __all__ = [
     "OwnerBase",
@@ -25,4 +32,9 @@ __all__ = [
     "TransactionCreate",
     "TransactionUpdate",
     "TransactionResponse",
+    "ExtractedInvoiceItem",
+    "ExtractedInvoiceResponse",
+    "InvoiceConfirmItem",
+    "InvoiceConfirmRequest",
+    "InvoiceConfirmResponse",
 ]
