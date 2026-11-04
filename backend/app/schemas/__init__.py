@@ -14,6 +14,11 @@ from app.schemas.invoice import (
     InvoiceConfirmRequest,
     InvoiceConfirmResponse,
 )
+from app.schemas.dashboard import (
+    OwnerSummary,
+    CategorySummary,
+    DashboardSummaryResponse,
+)
 
 __all__ = [
     "OwnerBase",
@@ -37,4 +42,8 @@ __all__ = [
     "InvoiceConfirmItem",
     "InvoiceConfirmRequest",
     "InvoiceConfirmResponse",
+    "OwnerSummary",
+    "CategorySummary",
+    "DashboardSummaryResponse",
 ]
+
