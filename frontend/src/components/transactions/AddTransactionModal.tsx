@@ -76,18 +76,18 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
               <PlusCircle className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-slate-900 text-base">Novo Lançamento Manual</h3>
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">Novo Lançamento Manual</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <X className="w-5 h-5" />
           </button>
@@ -96,14 +96,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-medium">
               {errorMsg}
             </div>
           )}
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Descrição da Compra *
             </label>
             <input
@@ -112,14 +112,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               placeholder="Ex: Supermercado Pão de Açúcar, Farmácia, etc."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
             />
           </div>
 
           {/* Amount & Date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Valor (R$) *</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Valor (R$) *</label>
               <input
                 type="number"
                 step="0.01"
@@ -128,17 +128,17 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 placeholder="0,00"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2 text-sm font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Data da Compra *</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Data da Compra *</label>
               <input
                 type="date"
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               />
             </div>
           </div>
@@ -146,13 +146,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           {/* Owner & Card */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Responsável (Quem deve?) *
               </label>
               <select
                 value={ownerId}
                 onChange={(e) => setOwnerId(Number(e.target.value))}
-                className="w-full px-3.5 py-2 text-sm font-medium bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               >
                 {owners.map((owner) => (
                   <option key={owner.id} value={owner.id}>
@@ -162,11 +162,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Cartão de Crédito</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Cartão de Crédito</label>
               <select
                 value={cardId || ''}
                 onChange={(e) => setCardId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               >
                 {cards.map((card) => (
                   <option key={card.id} value={card.id}>
@@ -180,11 +180,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           {/* Category & Installments */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Categoria *</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria *</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
@@ -194,7 +194,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Parcelas (Atual / Total)
               </label>
               <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   max={totalParcs}
                   value={curParcs}
                   onChange={(e) => setCurParcs(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm text-center bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-sm text-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
                 />
                 <span className="text-slate-400 font-bold">/</span>
                 <input
@@ -213,7 +213,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   max="60"
                   value={totalParcs}
                   onChange={(e) => setTotalParcs(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm text-center bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-sm text-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -221,7 +221,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
           {/* Comment */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Observação / Comentário (Opcional)
             </label>
             <input
@@ -229,24 +229,24 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               placeholder="Ex: Compra do almoço de domingo"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
             />
           </div>
 
           {/* Buttons */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all"
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl transition-all"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm shadow-emerald-600/30 transition-all disabled:opacity-50"
+              className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs shadow-emerald-600/30 transition-all disabled:opacity-50"
             >
               {isSubmitting ? 'Salvando...' : 'Cadastrar Lançamento'}
             </button>

@@ -106,18 +106,18 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
       </div>
 
       {/* Categories Breakdown */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-3.5">
             <div className="flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-emerald-600" />
-              <h3 className="font-bold text-slate-900 text-sm">Gastos por Categoria</h3>
+              <PieChart className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Gastos por Categoria</h3>
             </div>
-            <span className="text-xs text-slate-400">{categoriesSummary.length} categorias</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{categoriesSummary.length} categorias</span>
           </div>
 
           {categoriesSummary.length === 0 ? (
-            <div className="py-8 text-center text-slate-400 text-xs">
+            <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
               Nenhuma despesa registrada neste mês.
             </div>
           ) : (
@@ -125,15 +125,15 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
               {categoriesSummary.slice(0, 5).map((cat, idx) => (
                 <div key={cat.category_id}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-slate-700 truncate max-w-[140px]">
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
                       {cat.category_name}
                     </span>
-                    <span className="text-slate-500 font-semibold">
+                    <span className="text-slate-500 dark:text-slate-400 font-semibold">
                       {formatCurrency(cat.total_amount)}{' '}
-                      <span className="text-slate-400 font-normal">({cat.percentage.toFixed(0)}%)</span>
+                      <span className="text-slate-400 dark:text-slate-500 font-normal">({cat.percentage.toFixed(0)}%)</span>
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${getCategoryColor(cat.category_name, idx)}`}
                       style={{ width: `${Math.min(cat.percentage, 100)}%` }}
@@ -146,7 +146,7 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
         </div>
 
         {categoriesSummary.length > 5 && (
-          <p className="text-[11px] text-slate-400 text-right mt-2">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 text-right mt-2">
             + {categoriesSummary.length - 5} outras categorias
           </p>
         )}

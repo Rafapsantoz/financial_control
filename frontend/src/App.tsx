@@ -5,6 +5,7 @@ import { InvoiceOverview } from './components/dashboard/InvoiceOverview'
 import { TransactionTable } from './components/transactions/TransactionTable'
 import { AddTransactionModal } from './components/transactions/AddTransactionModal'
 import { InvoiceUploaderModal } from './components/invoice-uploader/InvoiceUploaderModal'
+import { AdminPanel } from './components/admin/AdminPanel'
 import {
   createTransaction,
   deleteTransaction,
@@ -20,6 +21,27 @@ import { Card, Category, DashboardSummaryResponse, Owner, Transaction } from './
 export function App() {
   const [currentMonth, setCurrentMonth] = useState('2026-11')
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null)
+  const [currentView, setCurrentView] = useState<'dashboard' | 'admin'>('dashboard')
+
+  // Theme Management
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('fo_theme')
+    if (saved === 'dark' || saved === 'light') return saved
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('fo_theme', theme)
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+  }
 
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -33,18 +55,20 @@ export function App() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
 
-  // Initial load of master records (owners, cards, categories)
-  useEffect(() => {
-    async function loadMasters() {
-      try {
-        const [o, c, cat] = await Promise.all([fetchOwners(), fetchCards(), fetchCategories()])
-        setOwners(o)
-        setCards(c)
-        setCategories(cat)
-      } catch (err) {
-        console.error('Erro ao carregar dados base:', err)
-      }
+  // Master records reload function (shared with Admin Panel)
+  const loadMasters = async () => {
+    try {
+      const [o, c, cat] = await Promise.all([fetchOwners(), fetchCards(), fetchCategories()])
+      setOwners(o)
+      setCards(c)
+      setCategories(cat)
+    } catch (err) {
+      console.error('Erro ao carregar dados base:', err)
     }
+  }
+
+  // Initial load
+  useEffect(() => {
     loadMasters()
   }, [])
 
@@ -76,7 +100,6 @@ export function App() {
     try {
       setIsUpdatingId(id)
       await togglePaid(id)
-      // Refresh to keep strict totals synchronized
       await loadMonthData()
     } catch (err: any) {
       alert(`Erro ao atualizar pagamento: ${err.message}`)
@@ -102,8 +125,14 @@ export function App() {
     await loadMonthData()
   }
 
+  // Combined refresh when admin actions occur
+  const handleRefreshFromAdmin = async () => {
+    await loadMasters()
+    await loadMonthData()
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Top Navigation */}
       <Header
         currentMonth={currentMonth}
@@ -112,80 +141,101 @@ export function App() {
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onOpenUploadModal={() => setIsUploadModalOpen(true)}
         isLoading={isLoading}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6 flex-1">
         {errorBanner && (
-          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center justify-between shadow-xs">
+          <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-sm flex items-center justify-between shadow-xs">
             <span>{errorBanner}</span>
             <button
               onClick={loadMonthData}
-              className="px-3 py-1 bg-white border border-rose-200 rounded-lg text-xs font-semibold hover:bg-rose-100"
+              className="px-3 py-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 rounded-lg text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-900"
             >
               Tentar novamente
             </button>
           </div>
         )}
 
-        {/* 1. Family Rateio Cards (Rafael, Mãe, Irmã) */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                Rateio Familiar da Fatura
-              </h2>
-              <p className="text-xs text-slate-500">
-                Divisão individual dos gastos entre Rafael, Mãe e Irmã (RN03)
-              </p>
-            </div>
-            {selectedOwnerId !== null && (
-              <button
-                onClick={() => setSelectedOwnerId(null)}
-                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200"
-              >
-                Limpar filtro do membro
-              </button>
-            )}
-          </div>
+        {/* VIEW 1: DASHBOARD */}
+        {currentView === 'dashboard' && (
+          <>
+            {/* 1. Family Rateio Cards (Rafael, Mãe, Irmã) */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                    Rateio Familiar da Fatura
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Divisão individual dos gastos entre Rafael, Mãe e Irmã (RN03)
+                  </p>
+                </div>
+                {selectedOwnerId !== null && (
+                  <button
+                    onClick={() => setSelectedOwnerId(null)}
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800"
+                  >
+                    Limpar filtro do membro
+                  </button>
+                )}
+              </div>
 
-          <FamilyCards
-            ownersSummary={summary?.owners_summary || []}
-            selectedOwnerId={selectedOwnerId}
-            onSelectOwner={setSelectedOwnerId}
-          />
-        </section>
+              <FamilyCards
+                ownersSummary={summary?.owners_summary || []}
+                selectedOwnerId={selectedOwnerId}
+                onSelectOwner={setSelectedOwnerId}
+              />
+            </section>
 
-        {/* 2. Invoice Totals & Categories Breakdown */}
-        <section>
-          <InvoiceOverview
-            totalAmount={summary?.total_amount || 0}
-            totalPaid={summary?.total_paid || 0}
-            totalPending={summary?.total_pending || 0}
-            categoriesSummary={summary?.category_summary || []}
-            cardName={cards[0]?.card_name || 'Nubank Principal'}
-          />
-        </section>
+            {/* 2. Invoice Totals & Categories Breakdown */}
+            <section>
+              <InvoiceOverview
+                totalAmount={summary?.total_amount || 0}
+                totalPaid={summary?.total_paid || 0}
+                totalPending={summary?.total_pending || 0}
+                categoriesSummary={summary?.category_summary || []}
+                cardName={cards[0]?.card_name || 'Nubank Principal'}
+              />
+            </section>
 
-        {/* 3. Detailed Transactions Table */}
-        <section>
-          <TransactionTable
-            transactions={transactions}
-            owners={owners}
-            cards={cards}
-            categories={categories}
-            selectedOwnerId={selectedOwnerId}
-            onSelectOwner={setSelectedOwnerId}
-            onTogglePaid={handleTogglePaid}
-            onDeleteTransaction={handleDeleteTransaction}
-            isUpdatingId={isUpdatingId}
-          />
-        </section>
+            {/* 3. Detailed Transactions Table */}
+            <section>
+              <TransactionTable
+                transactions={transactions}
+                owners={owners}
+                cards={cards}
+                categories={categories}
+                selectedOwnerId={selectedOwnerId}
+                onSelectOwner={setSelectedOwnerId}
+                onTogglePaid={handleTogglePaid}
+                onDeleteTransaction={handleDeleteTransaction}
+                isUpdatingId={isUpdatingId}
+              />
+            </section>
+          </>
+        )}
+
+        {/* VIEW 2: ADMINISTRATION PANEL */}
+        {currentView === 'admin' && (
+          <section className="animate-in fade-in duration-200">
+            <AdminPanel
+              owners={owners}
+              cards={cards}
+              categories={categories}
+              onRefreshMasters={handleRefreshFromAdmin}
+            />
+          </section>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 mt-8">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 mt-8 transition-colors">
+        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 dark:text-slate-500">
           Financial Organizer • Backend FastAPI + SQLite • Inteligência Artificial Google Gemini 2.5
         </div>
       </footer>

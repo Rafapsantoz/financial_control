@@ -72,15 +72,126 @@ export async function fetchOwners(): Promise<Owner[]> {
   return res.json()
 }
 
+export async function createOwner(data: { name: string; category?: string; phone_number?: string }): Promise<Owner> {
+  const res = await fetch(`${BASE_URL}/owners`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao cadastrar proprietário' }))
+    throw new Error(err.detail || 'Falha ao cadastrar proprietário')
+  }
+  return res.json()
+}
+
+export async function updateOwner(id: number, data: { name?: string; category?: string; phone_number?: string }): Promise<Owner> {
+  const res = await fetch(`${BASE_URL}/owners/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar proprietário' }))
+    throw new Error(err.detail || 'Falha ao atualizar proprietário')
+  }
+  return res.json()
+}
+
+export async function deleteOwner(id: number): Promise<{ detail: string }> {
+  const res = await fetch(`${BASE_URL}/owners/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao excluir proprietário' }))
+    throw new Error(err.detail || 'Falha ao excluir proprietário')
+  }
+  return res.json()
+}
+
 export async function fetchCards(): Promise<Card[]> {
   const res = await fetch(`${BASE_URL}/cards`)
   if (!res.ok) throw new Error('Falha ao buscar cartões')
   return res.json()
 }
 
+export async function createCard(data: { card_name: string; payment_date?: string | null; total_limit?: number }): Promise<Card> {
+  const res = await fetch(`${BASE_URL}/cards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao cadastrar cartão' }))
+    throw new Error(err.detail || 'Falha ao cadastrar cartão')
+  }
+  return res.json()
+}
+
+export async function updateCard(id: number, data: { card_name?: string; payment_date?: string | null; total_limit?: number }): Promise<Card> {
+  const res = await fetch(`${BASE_URL}/cards/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar cartão' }))
+    throw new Error(err.detail || 'Falha ao atualizar cartão')
+  }
+  return res.json()
+}
+
+export async function deleteCard(id: number): Promise<{ detail: string }> {
+  const res = await fetch(`${BASE_URL}/cards/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao excluir cartão' }))
+    throw new Error(err.detail || 'Falha ao excluir cartão')
+  }
+  return res.json()
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   const res = await fetch(`${BASE_URL}/categories`)
   if (!res.ok) throw new Error('Falha ao buscar categorias')
+  return res.json()
+}
+
+export async function createCategory(data: { description: string }): Promise<Category> {
+  const res = await fetch(`${BASE_URL}/categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao cadastrar categoria' }))
+    throw new Error(err.detail || 'Falha ao cadastrar categoria')
+  }
+  return res.json()
+}
+
+export async function updateCategory(id: number, data: { description: string }): Promise<Category> {
+  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar categoria' }))
+    throw new Error(err.detail || 'Falha ao atualizar categoria')
+  }
+  return res.json()
+}
+
+export async function deleteCategory(id: number): Promise<{ detail: string }> {
+  const res = await fetch(`${BASE_URL}/categories/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao excluir categoria' }))
+    throw new Error(err.detail || 'Falha ao excluir categoria')
+  }
   return res.json()
 }
 
