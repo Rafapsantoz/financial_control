@@ -1,27 +1,33 @@
-# PowerShell Startup Script — Financial Organizer
+# PowerShell Startup Script - Financial Organizer
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 Set-Location $scriptDir
 
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "  🏦 FINANCIAL ORGANIZER — CONTROLE FAMILIAR DE CARTÕES" -ForegroundColor Green
-Write-Host "  Rafael • Mãe • Irmã | Extração com Google Gemini AI" -ForegroundColor Yellow
+Write-Host "  FINANCIAL ORGANIZER -- CONTROLE FAMILIAR DE CARTOES" -ForegroundColor Green
+Write-Host "  Rafael | Mae | Irma -- Extracao com Google Gemini AI" -ForegroundColor Yellow
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
 $pythonExe = Join-Path $scriptDir "backend\.venv\Scripts\python.exe"
+if (-not (Test-Path $pythonExe)) {
+    $pythonExe = Join-Path $scriptDir "backend\venv\Scripts\python.exe"
+}
+
 $nodeDir = Join-Path $scriptDir ".tools\node"
 $distHtml = Join-Path $scriptDir "frontend\dist\index.html"
 
 if (-not (Test-Path $pythonExe)) {
-    Write-Host "[ERRO] Ambiente Python não encontrado em backend\.venv" -ForegroundColor Red
+    Write-Host "[ERRO] Ambiente Python nao encontrado em backend\.venv" -ForegroundColor Red
+    Write-Host "Caminho procurado: $pythonExe" -ForegroundColor Red
+    Read-Host "Pressione Enter para fechar..."
     exit 1
 }
 
-# Se o build do frontend não existir, compila
+# Se o build do frontend nao existir, compila
 if (-not (Test-Path $distHtml)) {
-    Write-Host "[INFO] Gerando build de produção do frontend React..." -ForegroundColor Cyan
+    Write-Host "[INFO] Gerando build de producao do frontend React..." -ForegroundColor Cyan
     $env:PATH = "$nodeDir;" + $env:PATH
     Set-Location (Join-Path $scriptDir "frontend")
     & (Join-Path $nodeDir "npm.cmd") run build
