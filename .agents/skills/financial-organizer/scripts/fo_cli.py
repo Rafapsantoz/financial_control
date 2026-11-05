@@ -288,6 +288,10 @@ def main():
     # validate
     subparsers.add_parser("validate", help="Executa auditoria completa de 100%% das rotas da API.")
 
+    # server
+    p_server = subparsers.add_parser("server", help="Inicia o servidor web + API local e abre o navegador.")
+    p_server.add_argument("--port", type=int, default=8000, help="Porta do servidor (padrão 8000)")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "status":
@@ -315,6 +319,12 @@ def main():
         import subprocess
         python_bin = sys.executable
         subprocess.run([python_bin, test_script])
+    elif args.command == "server":
+        import subprocess
+        import webbrowser
+        print(f"🚀 Iniciando servidor Financial Organizer em http://localhost:{args.port}...")
+        webbrowser.open(f"http://localhost:{args.port}")
+        subprocess.run([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(args.port), "--reload"], cwd=BACKEND_DIR)
 
 
 if __name__ == "__main__":

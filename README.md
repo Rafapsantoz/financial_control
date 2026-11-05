@@ -28,5 +28,60 @@ Sistema moderno e portátil para **controle de gastos, divisão de faturas de ca
 
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy 2.0 (assíncrono), Pydantic v2.
 - **Banco de Dados:** SQLite nativo com `aiosqlite`.
-- **Inteligência Artificial:** Google Gemini 2.0 / 1.5 Flash via SDK oficial `google-genai`.
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons, Recharts.
+- **Inteligência Artificial:** Google Gemini 2.5 Flash via SDK oficial `google-genai`.
+- **Frontend:** React 18/19, TypeScript, Vite, Tailwind CSS, Lucide Icons.
+
+---
+
+## 🚀 Como Executar o Projeto (1 Clique)
+
+### Opção 1: Clique Duplo no Windows
+Basta dar um duplo clique no arquivo [`start.bat`](file:///C:/Antigravity/programs/financial_organizer/start.bat).
+O script inicializa o backend FastAPI, conecta o banco SQLite, serve o frontend React e abre o navegador automaticamente em **`http://localhost:8000`**.
+
+### Opção 2: Via Terminal PowerShell
+```powershell
+# Execução direta pelo script
+.\start.ps1
+
+# Ou iniciando via CLI utilitário
+& ".\backend\.venv\Scripts\python.exe" "scripts\fo_cli.py" server
+```
+
+---
+
+## 🛠️ Comandos Rápidos da CLI (`fo_cli.py`)
+
+```powershell
+$py = ".\backend\.venv\Scripts\python.exe"
+$cli = ".\scripts\fo_cli.py"
+
+# Resumo mensal e rateio familiar (Rafael, Mãe, Irmã)
+& $py $cli summary --month 2026-11
+
+# Listar contas pendentes de pagamento
+& $py $cli list --pending-only
+
+# Alternar status de pagamento (dar baixa na dívida)
+& $py $cli toggle-paid <ID>
+
+# Cadastrar despesa manual
+& $py $cli add --desc "Mercado" --value 150.0 --owner "Rafael" --cat "Mercado"
+
+# Extrair fatura PDF usando o Gemini IA
+& $py $cli extract "caminho\fatura.pdf" --confirm
+
+# Rodar auditoria completa de rotas
+& $py $cli validate
+```
+
+---
+
+## 🧪 Testes Automatizados
+
+```powershell
+cd backend
+& ".\.venv\Scripts\python.exe" -m pytest
+& ".\.venv\Scripts\python.exe" tests\validate_all_routes.py
+```
+

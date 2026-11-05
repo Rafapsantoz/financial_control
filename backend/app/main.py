@@ -1,7 +1,10 @@
 import logging
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine
@@ -58,10 +61,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Frontend dist path for production single-port serving
+FRONTEND_DIST = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+)
+assets_path = os.path.join(FRONTEND_DIST, "assets")
+if os.path.exists(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
 
 @app.get("/", tags=["Health"])
-async def root():
-    """Root health-check and metadata endpoint."""
+async def root(request: Request):
+    """
+    Root endpoint.
+    Returns the React Single Page Application for web browsers (Accept: text/html),
+    or JSON metadata for API clients and healthcheck scripts.
+    """
+    accept = request.headers.get("accept", "")
+    index_file = os.path.join(FRONTEND_DIST, "index.html")
+    if "text/html" in accept and os.path.exists(index_file):
+        return FileResponse(index_file, media_type="text/html")
+
     return {
         "status": "ok",
         "app": settings.PROJECT_NAME,
@@ -78,3 +98,4 @@ async def health_check():
 
 # Mount API v1 router
 app.include_router(api_router, prefix="/api/v1")
+
