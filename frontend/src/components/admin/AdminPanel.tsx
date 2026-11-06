@@ -394,8 +394,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+              <thead className="bg-slate-100/80 dark:bg-slate-800">
+                <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
                   <th className="py-3 px-4 w-16">ID</th>
                   <th className="py-3 px-4">Nome</th>
                   <th className="py-3 px-4">Tipo / Vínculo</th>
@@ -468,8 +468,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+              <thead className="bg-slate-100/80 dark:bg-slate-800">
+                <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
                   <th className="py-3 px-4 w-16">ID</th>
                   <th className="py-3 px-4">Nome do Cartão</th>
                   <th className="py-3 px-4">Data / Dia de Vencimento</th>
@@ -540,8 +540,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+              <thead className="bg-slate-100/80 dark:bg-slate-800">
+                <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
                   <th className="py-3 px-4 w-16">ID</th>
                   <th className="py-3 px-4">Descrição da Categoria</th>
                   <th className="py-3 px-4 text-right">Ações</th>

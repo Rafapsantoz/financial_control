@@ -8,6 +8,9 @@ export default {
   theme: {
     extend: {
       colors: {
+        slate: {
+          850: '#172033',
+        },
         brand: {
           50: '#f0fdf4',
           100: '#dcfce7',

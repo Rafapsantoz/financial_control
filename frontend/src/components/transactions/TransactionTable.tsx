@@ -202,8 +202,8 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          <thead className="bg-slate-100/80 dark:bg-slate-800">
+            <tr className="border-b border-slate-200 dark:border-slate-700/80 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
               <th className="py-3 px-4">Data</th>
               <th className="py-3 px-4">Descrição</th>
               <th className="py-3 px-4">Responsável</th>
