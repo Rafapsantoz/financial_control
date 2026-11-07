@@ -10,7 +10,7 @@ DEFAULT_DB_URL = f"sqlite+aiosqlite:///{DEFAULT_DB_FILE.as_posix()}"
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Financial Organizer API"
+    PROJECT_NAME: str = "RPsec Financeiro API"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
 
