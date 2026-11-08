@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Financial Organizer (FO) - CLI & Automation Tool
-Utilitário CLI para gerenciamento, inspeção e automação do Financial Organizer.
+Utilitário CLI para gerenciamento, inspeção e automação do Financial Organizer / RPsec Financeiro.
 Permite consultar fechamento de fatura, rateio familiar (Rafael, Mãe, Irmã),
-adicionar despesas manuais, alterar status de quitação e extrair faturas em PDF via Gemini.
+adicionar e editar despesas manuais, alterar status de quitação e extrair faturas em PDF via Gemini.
 """
 
 import argparse
@@ -39,7 +39,7 @@ from app.services.dashboard_service import get_dashboard_summary
 async def cmd_status():
     """Exibe status geral do banco de dados e ambiente."""
     print("=" * 70)
-    print("🏦 FINANCIAL ORGANIZER - STATUS DO SISTEMA")
+    print("🏦 RPSEC FINANCEIRO - STATUS DO SISTEMA")
     print("=" * 70)
     print(f"Diretório Raiz: {PROJECT_ROOT}")
     db_path = os.path.join(PROJECT_ROOT, "financial.db")
@@ -173,6 +173,69 @@ async def cmd_add_transaction(desc: str, value: float, owner_name: str, cat_name
         print(f"✅ Transação #{tx.id} cadastrada com sucesso: {desc} (R$ {value:.2f}) para {owner.name}!")
 
 
+async def cmd_edit_transaction(
+    tx_id: int,
+    desc: str = None,
+    value: float = None,
+    owner_name: str = None,
+    cat_name: str = None,
+    card_name: str = None,
+    parcs: str = None,
+    paid: bool = None,
+    comment: str = None,
+):
+    """Edita campos de uma transação existente."""
+    async with AsyncSessionLocal() as db:
+        tx = await db.get(Transaction, tx_id)
+        if not tx:
+            print(f"❌ Transação ID #{tx_id} não encontrada.")
+            return
+
+        if desc is not None:
+            tx.description = desc.strip()
+        if value is not None:
+            tx.value = value
+        if owner_name:
+            res_owner = await db.execute(select(Owner).where(Owner.name.ilike(f"%{owner_name}%")))
+            owner = res_owner.scalars().first()
+            if not owner:
+                print(f"❌ Erro: Proprietário '{owner_name}' não encontrado.")
+                return
+            tx.owner_id = owner.id
+        if cat_name:
+            res_cat = await db.execute(select(Category).where(Category.description.ilike(f"%{cat_name}%")))
+            cat = res_cat.scalars().first()
+            if not cat:
+                print(f"❌ Erro: Categoria '{cat_name}' não encontrada.")
+                return
+            tx.type_id = cat.id
+        if card_name:
+            res_card = await db.execute(select(Card).where(Card.card_name.ilike(f"%{card_name}%")))
+            card = res_card.scalars().first()
+            if not card:
+                print(f"❌ Erro: Cartão '{card_name}' não encontrado.")
+                return
+            tx.card_id = card.id
+        if parcs:
+            if "/" in parcs:
+                p_parts = parcs.split("/")
+                cur_p, tot_p = int(p_parts[0]), int(p_parts[1])
+                if cur_p > tot_p:
+                    print(f"❌ Erro: Parcela atual ({cur_p}) maior que total ({tot_p}).")
+                    return
+                tx.cur_parcs = cur_p
+                tx.total_parcs = tot_p
+        if paid is not None:
+            tx.is_paid = paid
+        if comment is not None:
+            tx.comment = comment
+
+        await db.commit()
+        await db.refresh(tx)
+        status_text = "🟢 Pago" if tx.is_paid else "🔴 Pendente"
+        print(f"✅ Transação #{tx.id} atualizada com sucesso: '{tx.description}' | R$ {tx.value:.2f} | Status: {status_text} | Parc: {tx.cur_parcs}/{tx.total_parcs}")
+
+
 async def cmd_toggle_paid(tx_id: int):
     """Alterna o status de quitação de uma transação."""
     async with AsyncSessionLocal() as db:
@@ -248,7 +311,7 @@ async def cmd_extract_invoice(pdf_path: str, card_id: int = None, auto_confirm: 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Financial Organizer CLI - Ferramenta de gestão financeira familiar e extração de faturas."
+        description="RPsec Financeiro CLI - Ferramenta de gestão financeira familiar e extração de faturas."
     )
     subparsers = parser.add_subparsers(dest="command", help="Comandos disponíveis")
 
@@ -274,6 +337,19 @@ def main():
     p_add.add_argument("--card", help="Nome do cartão (opcional, padrão: primeiro cartão)")
     p_add.add_argument("--parcs", default="1/1", help="Parcelas no formato 1/1 ou 2/10")
     p_add.add_argument("--comment", help="Comentário ou observação opcional")
+
+    # edit
+    p_edit = subparsers.add_parser("edit", help="Edita campos de uma transação existente.")
+    p_edit.add_argument("id", type=int, help="ID da transação")
+    p_edit.add_argument("--desc", "-d", help="Nova descrição da compra")
+    p_edit.add_argument("--value", "-v", type=float, help="Novo valor da compra (R$)")
+    p_edit.add_argument("--owner", "-o", help="Nome do responsável (Rafael, Mãe, Irmã)")
+    p_edit.add_argument("--cat", help="Nome da categoria (Mercado, Lazer, etc.)")
+    p_edit.add_argument("--card", help="Nome do cartão")
+    p_edit.add_argument("--parcs", help="Parcelas no formato 1/1 ou 2/10")
+    p_edit.add_argument("--paid", dest="paid", action="store_true", default=None, help="Marcar como paga")
+    p_edit.add_argument("--unpaid", dest="paid", action="store_false", help="Marcar como pendente")
+    p_edit.add_argument("--comment", help="Novo comentário ou observação")
 
     # toggle-paid
     p_toggle = subparsers.add_parser("toggle-paid", help="Alterna quitação da dívida de uma transação.")
@@ -310,6 +386,18 @@ def main():
             parcs=args.parcs,
             comment=args.comment,
         ))
+    elif args.command == "edit":
+        asyncio.run(cmd_edit_transaction(
+            tx_id=args.id,
+            desc=args.desc,
+            value=args.value,
+            owner_name=args.owner,
+            cat_name=args.cat,
+            card_name=args.card,
+            parcs=args.parcs,
+            paid=args.paid,
+            comment=args.comment,
+        ))
     elif args.command == "toggle-paid":
         asyncio.run(cmd_toggle_paid(args.id))
     elif args.command == "extract":
@@ -322,7 +410,7 @@ def main():
     elif args.command == "server":
         import subprocess
         import webbrowser
-        print(f"🚀 Iniciando servidor Financial Organizer em http://localhost:{args.port}...")
+        print(f"🚀 Iniciando servidor RPsec Financeiro em http://localhost:{args.port}...")
         webbrowser.open(f"http://localhost:{args.port}")
         subprocess.run([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(args.port), "--reload"], cwd=BACKEND_DIR)
 

@@ -50,6 +50,19 @@ export async function createTransaction(data: Partial<Transaction>): Promise<Tra
   return res.json()
 }
 
+export async function updateTransaction(id: number, data: Partial<Transaction>): Promise<Transaction> {
+  const res = await fetch(`${BASE_URL}/transactions/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar transação' }))
+    throw new Error(err.detail || 'Falha ao atualizar transação')
+  }
+  return res.json()
+}
+
 export async function togglePaid(id: number): Promise<Transaction> {
   const res = await fetch(`${BASE_URL}/transactions/${id}/toggle-paid`, {
     method: 'PATCH',

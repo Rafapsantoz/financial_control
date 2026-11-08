@@ -4,6 +4,7 @@ import { FamilyCards } from './components/dashboard/FamilyCards'
 import { InvoiceOverview } from './components/dashboard/InvoiceOverview'
 import { TransactionTable } from './components/transactions/TransactionTable'
 import { AddTransactionModal } from './components/transactions/AddTransactionModal'
+import { EditTransactionModal } from './components/transactions/EditTransactionModal'
 import { InvoiceUploaderModal } from './components/invoice-uploader/InvoiceUploaderModal'
 import { AdminPanel } from './components/admin/AdminPanel'
 import {
@@ -15,6 +16,7 @@ import {
   fetchSummary,
   fetchTransactions,
   togglePaid,
+  updateTransaction,
 } from './lib/api'
 import { Card, Category, DashboardSummaryResponse, Owner, Transaction } from './types'
 
@@ -52,6 +54,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdatingId, setIsUpdatingId] = useState<number | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
 
@@ -125,6 +128,12 @@ export function App() {
     await loadMonthData()
   }
 
+  // Edit/update transaction
+  const handleSaveEditedTransaction = async (id: number, data: Partial<Transaction>) => {
+    await updateTransaction(id, data)
+    await loadMonthData()
+  }
+
   // Combined refresh when admin actions occur
   const handleRefreshFromAdmin = async () => {
     await loadMasters()
@@ -154,7 +163,7 @@ export function App() {
             <span>{errorBanner}</span>
             <button
               onClick={loadMonthData}
-              className="px-3 py-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 rounded-lg text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-900"
+              className="px-3 py-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 rounded-lg text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-900 cursor-pointer"
             >
               Tentar novamente
             </button>
@@ -178,7 +187,7 @@ export function App() {
                 {selectedOwnerId !== null && (
                   <button
                     onClick={() => setSelectedOwnerId(null)}
-                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800"
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer"
                   >
                     Limpar filtro do membro
                   </button>
@@ -214,6 +223,7 @@ export function App() {
                 onSelectOwner={setSelectedOwnerId}
                 onTogglePaid={handleTogglePaid}
                 onDeleteTransaction={handleDeleteTransaction}
+                onEditTransaction={(tx) => setEditingTransaction(tx)}
                 isUpdatingId={isUpdatingId}
               />
             </section>
@@ -236,7 +246,7 @@ export function App() {
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 mt-8 transition-colors">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 dark:text-slate-500">
-          Financial Organizer • Backend FastAPI + SQLite • Inteligência Artificial Google Gemini 2.5
+          RPsec Financeiro • Backend FastAPI + SQLite • Inteligência Artificial Google Gemini 2.5
         </div>
       </footer>
 
@@ -249,6 +259,16 @@ export function App() {
         cards={cards}
         categories={categories}
         currentMonth={currentMonth}
+      />
+
+      <EditTransactionModal
+        isOpen={!!editingTransaction}
+        transaction={editingTransaction}
+        onClose={() => setEditingTransaction(null)}
+        onSave={handleSaveEditedTransaction}
+        owners={owners}
+        cards={cards}
+        categories={categories}
       />
 
       <InvoiceUploaderModal

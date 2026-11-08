@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock,
   Filter,
+  Pencil,
   Search,
   Trash2,
   X,
@@ -22,6 +23,7 @@ interface TransactionTableProps {
   onSelectOwner: (ownerId: number | null) => void
   onTogglePaid: (id: number) => void
   onDeleteTransaction: (id: number) => void
+  onEditTransaction: (tx: Transaction) => void
   isUpdatingId?: number | null
 }
 
@@ -34,6 +36,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   onSelectOwner,
   onTogglePaid,
   onDeleteTransaction,
+  onEditTransaction,
   isUpdatingId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -129,7 +132,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -140,7 +143,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
           <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
             <button
               onClick={() => onSelectOwner(null)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                 selectedOwnerId === null
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -152,7 +155,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
               <button
                 key={owner.id}
                 onClick={() => onSelectOwner(owner.id)}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                   selectedOwnerId === owner.id
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -167,7 +170,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
           <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                 statusFilter === 'all'
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -177,7 +180,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('pending')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                 statusFilter === 'pending'
                   ? 'bg-rose-600 text-white shadow-xs'
                   : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
@@ -187,7 +190,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('paid')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                 statusFilter === 'paid'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
@@ -286,7 +289,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                         onClick={() => onTogglePaid(tx.id)}
                         disabled={isToggling}
                         title="Clique para alternar status de pagamento"
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all shadow-xs ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                           tx.is_paid
                             ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800'
                             : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900 border border-rose-300 dark:border-rose-800'
@@ -306,15 +309,24 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                       </button>
                     </td>
 
-                    {/* Actions */}
+                    {/* Actions: Edit & Delete */}
                     <td className="py-3 px-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => onDeleteTransaction(tx.id)}
-                        title="Excluir lançamento"
-                        className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => onEditTransaction(tx)}
+                          title="Editar lançamento"
+                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteTransaction(tx.id)}
+                          title="Excluir lançamento"
+                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
