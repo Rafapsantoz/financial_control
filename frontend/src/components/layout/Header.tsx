@@ -3,14 +3,17 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Compass,
   CreditCard,
   FileUp,
+  Layers,
   LayoutDashboard,
   Moon,
   PlusCircle,
   RefreshCw,
   Settings,
   Sun,
+  Target,
 } from 'lucide-react'
 import { formatMonthName } from '../../lib/formatters'
 
@@ -21,8 +24,8 @@ interface HeaderProps {
   onOpenAddModal: () => void
   onOpenUploadModal: () => void
   isLoading?: boolean
-  currentView: 'dashboard' | 'admin'
-  onViewChange: (view: 'dashboard' | 'admin') => void
+  currentView: 'dashboard' | 'macro' | 'budget' | 'admin'
+  onViewChange: (view: 'dashboard' | 'macro' | 'budget' | 'admin') => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
 }
@@ -85,11 +88,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Navigation Tabs (Dashboard vs Admin) */}
+          {/* Navigation Tabs (Dashboard vs Macro vs Budget vs Admin) */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
             <button
               onClick={() => onViewChange('dashboard')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
                 currentView === 'dashboard'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -98,9 +101,34 @@ export const Header: React.FC<HeaderProps> = ({
               <LayoutDashboard className="w-3.5 h-3.5" />
               <span>Dashboard</span>
             </button>
+
+            <button
+              onClick={() => onViewChange('macro')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                currentView === 'macro'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Macro Projeção</span>
+            </button>
+
+            <button
+              onClick={() => onViewChange('budget')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                currentView === 'budget'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Orçamento & Metas</span>
+            </button>
+
             <button
               onClick={() => onViewChange('admin')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
                 currentView === 'admin'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'

@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy import select, text
 from app.core.database import AsyncSessionLocal, Base, engine
-from app.models import Card, Category, Owner
+from app.models import Card, Category, Goal, Owner
 
 logger = logging.getLogger("financial_organizer.init_db")
 
@@ -26,6 +26,16 @@ INITIAL_CARDS = [
     {"card_name": "Nubank", "total_limit": 5000.0, "payment_date": None, "due_day": 10},
 ]
 
+INITIAL_GOALS = [
+    {"title": "Cortina", "target_amount": 150.0, "saved_amount": 150.0, "category": "Essencial", "priority": "Média", "is_completed": True, "comment": "Cortina da sala"},
+    {"title": "Mesa", "target_amount": 350.0, "saved_amount": 350.0, "category": "Essencial", "priority": "Alta", "is_completed": True, "comment": "Mesa de trabalho home office"},
+    {"title": "Robô aspirador", "target_amount": 800.0, "saved_amount": 400.0, "category": "Conforto", "priority": "Média", "is_completed": False, "comment": "Robô aspirador para limpeza diária"},
+    {"title": "Cadeira Ergonômica", "target_amount": 900.0, "saved_amount": 0.0, "category": "Conforto", "priority": "Média", "is_completed": False, "comment": "Saúde postural no trabalho"},
+    {"title": "Monitor Secundário", "target_amount": 750.0, "saved_amount": 0.0, "category": "Essencial", "priority": "Alta", "is_completed": False, "comment": "Produtividade no código"},
+    {"title": "Headset", "target_amount": 250.0, "saved_amount": 0.0, "category": "Essencial", "priority": "Baixa", "is_completed": False, "comment": "Reuniões e calls"},
+    {"title": "Tela para Janela", "target_amount": 180.0, "saved_amount": 0.0, "category": "Essencial", "priority": "Média", "is_completed": False, "comment": "Proteção para cachorros"},
+]
+
 
 async def init_db() -> None:
     """
@@ -38,7 +48,7 @@ async def init_db() -> None:
             await conn.execute(text("PRAGMA foreign_keys = ON;"))
         await conn.run_sync(Base.metadata.create_all)
 
-        # SQLite automatic migration check for due_day column
+        # SQLite automatic migration check for due_day column in cards_fapp
         if "sqlite" in str(engine.url):
             try:
                 res = await conn.execute(text("PRAGMA table_info(cards_fapp);"))
@@ -74,5 +84,13 @@ async def init_db() -> None:
             if not existing:
                 session.add(Card(**card_data))
                 logger.info(f"Seeded card: {card_data['card_name']}")
+
+        # Seed Goals
+        for goal_data in INITIAL_GOALS:
+            stmt = select(Goal).where(Goal.title == goal_data["title"])
+            existing = await session.scalar(stmt)
+            if not existing:
+                session.add(Goal(**goal_data))
+                logger.info(f"Seeded goal: {goal_data['title']}")
 
         await session.commit()

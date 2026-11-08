@@ -34,6 +34,10 @@ async def run_route_validation():
     print(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
 
+    # Inicializa as tabelas e seeds no banco local antes dos testes
+    from app.db.init_db import init_db
+    await init_db()
+
     total_checks = 0
     passed_checks = 0
 
@@ -362,6 +366,40 @@ async def run_route_validation():
         # Limpeza da transação confirmada
         if persisted_items:
             await client.delete(f"/api/v1/transactions/{persisted_items[0]['id']}")
+
+        # -------------------------------------------------------------
+        # 8. ROTAS DE PLANEJAMENTO E MACRO PROJEÇÃO (/api/v1/planning)
+        # -------------------------------------------------------------
+        print("\n🔹 [8/8] Rotas de Planejamento e Macro Projeção (/api/v1/planning):")
+
+        # 8.1 Macro Projeção Anual & Runway
+        total_checks += 1
+        res = await client.get("/api/v1/planning/macro-projection?year=2026&account_balance=16638.40")
+        proj_data = res.json()
+        runway_months = proj_data.get("runway", {}).get("months_of_runway", 0)
+        if print_result("/api/v1/planning/macro-projection", "GET", res.status_code, 200, f"12 meses calculados | Runway: {runway_months} meses"):
+            passed_checks += 1
+
+        # 8.2 Metas / Wishlist
+        total_checks += 1
+        res = await client.get("/api/v1/planning/goals")
+        goals_data = res.json()
+        if print_result("/api/v1/planning/goals", "GET", res.status_code, 200, f"{len(goals_data)} metas listadas"):
+            passed_checks += 1
+
+        # 8.3 Cenários de Mudança de Cidade
+        total_checks += 1
+        res = await client.get("/api/v1/planning/scenarios")
+        scenarios_data = res.json()
+        if print_result("/api/v1/planning/scenarios", "GET", res.status_code, 200, f"{len(scenarios_data)} cenários comparativos"):
+            passed_checks += 1
+
+        # 8.4 15 Princípios da Metodologia
+        total_checks += 1
+        res = await client.get("/api/v1/planning/principles")
+        principles_data = res.json()
+        if print_result("/api/v1/planning/principles", "GET", res.status_code, 200, f"{len(principles_data)} princípios metodológicos"):
+            passed_checks += 1
 
     print("\n" + "=" * 80)
     print("📊 RESULTADO DA AUDITORIA DE ROTAS")

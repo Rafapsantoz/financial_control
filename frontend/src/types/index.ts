@@ -116,3 +116,74 @@ export interface InvoiceConfirmResponse {
   created_transactions: Transaction[]
   message: string
 }
+
+// --- PLANNING & SPREADSHEET PROJECTION TYPES ---
+
+export interface Goal {
+  id: number
+  title: string
+  target_amount: number
+  saved_amount: number
+  category: string
+  priority: string
+  is_completed: boolean
+  comment?: string | null
+}
+
+export interface FixedExpenseRow {
+  name: string
+  category: string
+  responsible: string
+  monthly_values: Record<string, number>
+  total_year: number
+}
+
+export interface MonthlyColumnSummary {
+  month_key: string
+  month_name: string
+  fixed_total: number
+  cards_total: number
+  variable_total: number
+  grand_total: number
+  paid_total: number
+  pending_total: number
+}
+
+export interface RunwayMetric {
+  account_balance: number
+  monthly_fixed_burn: number
+  months_of_runway: number
+  health_status: 'Excelente' | 'Adequado' | 'Atenção' | 'Crítico'
+  comment: string
+}
+
+export interface LivingScenario {
+  id: string
+  title: string
+  city: string
+  has_home_office: boolean
+  estimated_rent: number
+  estimated_bills: number
+  total_monthly: number
+  annual_impact: number
+  notes: string
+}
+
+export interface FinancialPrinciple {
+  step: number
+  title: string
+  description: string
+  category: string
+}
+
+export interface MacroProjectionResponse {
+  year: number
+  account_balance: number
+  runway: RunwayMetric
+  months: MonthlyColumnSummary[]
+  fixed_expenses: FixedExpenseRow[]
+  card_expenses: FixedExpenseRow[]
+  owners_matrix: Record<string, Record<string, number>>
+  categories_matrix: Record<string, Record<string, number>>
+  grand_total_year: number
+}

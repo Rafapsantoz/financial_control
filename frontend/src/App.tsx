@@ -7,6 +7,8 @@ import { AddTransactionModal } from './components/transactions/AddTransactionMod
 import { EditTransactionModal } from './components/transactions/EditTransactionModal'
 import { InvoiceUploaderModal } from './components/invoice-uploader/InvoiceUploaderModal'
 import { AdminPanel } from './components/admin/AdminPanel'
+import { MacroProjectionGrid } from './components/planning/MacroProjectionGrid'
+import { BudgetAnalysisTab } from './components/planning/BudgetAnalysisTab'
 import {
   createTransaction,
   deleteTransaction,
@@ -23,7 +25,7 @@ import { Card, Category, DashboardSummaryResponse, Owner, Transaction } from './
 export function App() {
   const [currentMonth, setCurrentMonth] = useState('2026-11')
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null)
-  const [currentView, setCurrentView] = useState<'dashboard' | 'admin'>('dashboard')
+  const [currentView, setCurrentView] = useState<'dashboard' | 'macro' | 'budget' | 'admin'>('dashboard')
 
   // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -230,7 +232,21 @@ export function App() {
           </>
         )}
 
-        {/* VIEW 2: ADMINISTRATION PANEL */}
+        {/* VIEW 2: MACRO PROJECTION & RUNWAY */}
+        {currentView === 'macro' && (
+          <section className="animate-in fade-in duration-200">
+            <MacroProjectionGrid />
+          </section>
+        )}
+
+        {/* VIEW 3: BUDGET ANALYSIS & GOALS */}
+        {currentView === 'budget' && (
+          <section className="animate-in fade-in duration-200">
+            <BudgetAnalysisTab />
+          </section>
+        )}
+
+        {/* VIEW 4: ADMINISTRATION PANEL */}
         {currentView === 'admin' && (
           <section className="animate-in fade-in duration-200">
             <AdminPanel

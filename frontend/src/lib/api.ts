@@ -3,8 +3,12 @@ import {
   Category,
   DashboardSummaryResponse,
   ExtractedInvoiceResponse,
+  Goal,
   InvoiceConfirmRequest,
   InvoiceConfirmResponse,
+  LivingScenario,
+  MacroProjectionResponse,
+  FinancialPrinciple,
   Owner,
   Transaction,
 } from '../types'
@@ -239,5 +243,72 @@ export async function confirmInvoiceBatch(
     const err = await res.json().catch(() => ({ detail: 'Erro ao confirmar transações' }))
     throw new Error(err.detail || 'Falha ao confirmar transações')
   }
+  return res.json()
+}
+
+// --- PLANNING & SPREADSHEET PROJECTION API ---
+
+export async function fetchMacroProjection(
+  year: number = 2026,
+  accountBalance: number = 16638.40
+): Promise<MacroProjectionResponse> {
+  const params = new URLSearchParams({
+    year: String(year),
+    account_balance: String(accountBalance),
+  })
+  const res = await fetch(`${BASE_URL}/planning/macro-projection?${params.toString()}`)
+  if (!res.ok) throw new Error('Falha ao carregar projeção macro anual')
+  return res.json()
+}
+
+export async function fetchGoals(): Promise<Goal[]> {
+  const res = await fetch(`${BASE_URL}/planning/goals`)
+  if (!res.ok) throw new Error('Falha ao buscar metas financeiras')
+  return res.json()
+}
+
+export async function createGoal(data: Omit<Goal, 'id'>): Promise<Goal> {
+  const res = await fetch(`${BASE_URL}/planning/goals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao criar meta' }))
+    throw new Error(err.detail || 'Falha ao cadastrar meta')
+  }
+  return res.json()
+}
+
+export async function updateGoal(id: number, data: Partial<Goal>): Promise<Goal> {
+  const res = await fetch(`${BASE_URL}/planning/goals/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar meta' }))
+    throw new Error(err.detail || 'Falha ao atualizar meta')
+  }
+  return res.json()
+}
+
+export async function deleteGoal(id: number): Promise<{ detail: string }> {
+  const res = await fetch(`${BASE_URL}/planning/goals/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error('Falha ao remover meta')
+  return res.json()
+}
+
+export async function fetchScenarios(): Promise<LivingScenario[]> {
+  const res = await fetch(`${BASE_URL}/planning/scenarios`)
+  if (!res.ok) throw new Error('Falha ao buscar cenários')
+  return res.json()
+}
+
+export async function fetchPrinciples(): Promise<FinancialPrinciple[]> {
+  const res = await fetch(`${BASE_URL}/planning/principles`)
+  if (!res.ok) throw new Error('Falha ao buscar princípios')
   return res.json()
 }
