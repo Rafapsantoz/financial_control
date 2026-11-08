@@ -10,7 +10,7 @@ from app.schemas.invoice import ExtractedInvoiceResponse
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 EXTRACTION_SYSTEM_INSTRUCTION = (
     "Você é um especialista contábil e de extração de dados financeiros de alta precisão. "
@@ -48,7 +48,7 @@ def get_gemini_client(api_key: Optional[str] = None) -> genai.Client:
 async def call_gemini_structured_extraction(
     pdf_bytes: bytes,
     client: Optional[genai.Client] = None,
-    model_name: str = DEFAULT_GEMINI_MODEL,
+    model_name: Optional[str] = None,
 ) -> ExtractedInvoiceResponse:
     """
     Sends PDF bytes to Gemini API using async structured generation.
@@ -61,6 +61,7 @@ async def call_gemini_structured_extraction(
             detail="Arquivo PDF vazio fornecido para extração.",
         )
 
+    effective_model = model_name or getattr(settings, "GEMINI_MODEL", None) or DEFAULT_GEMINI_MODEL
     genai_client = client or get_gemini_client()
 
     pdf_part = types.Part.from_bytes(
@@ -77,7 +78,7 @@ async def call_gemini_structured_extraction(
 
     try:
         response = await genai_client.aio.models.generate_content(
-            model=model_name,
+            model=effective_model,
             contents=[pdf_part, EXTRACTION_PROMPT],
             config=config,
         )

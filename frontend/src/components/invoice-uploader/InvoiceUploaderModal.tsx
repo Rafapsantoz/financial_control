@@ -164,7 +164,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   Extração Inteligente de Fatura PDF
                 </h3>
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  Google Gemini 2.5
+                  Google Gemini 3.8 Flash
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">

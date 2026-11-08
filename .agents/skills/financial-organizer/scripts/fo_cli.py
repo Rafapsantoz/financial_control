@@ -197,7 +197,7 @@ async def cmd_extract_invoice(pdf_path: str, card_id: int = None, auto_confirm: 
         pdf_bytes = f.read()
 
     print(f"📄 Lendo arquivo '{pdf_path}' ({len(pdf_bytes)} bytes)...")
-    print("🤖 Enviando para o Google Gemini API (gemini-2.5-flash)...")
+    print("🤖 Enviando para o Google Gemini API (gemini-3.8-flash)...")
 
     from app.services.gemini_service import extract_invoice_from_pdf, confirm_invoice_transactions
     from app.schemas.invoice import InvoiceConfirmRequest, InvoiceConfirmItem
