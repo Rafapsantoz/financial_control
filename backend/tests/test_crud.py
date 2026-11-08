@@ -114,13 +114,15 @@ async def test_list_seeded_cards(client):
 
 @pytest.mark.asyncio
 async def test_create_and_update_card(client):
-    payload = {"card_name": "Inter Black", "total_limit": 10000.0}
+    payload = {"card_name": "Inter Black", "due_day": 10, "total_limit": 10000.0}
     res = await client.post("/api/v1/cards", json=payload)
     assert res.status_code == 201
     card_id = res.json()["id"]
+    assert res.json()["due_day"] == 10
 
-    up_res = await client.put(f"/api/v1/cards/{card_id}", json={"total_limit": 15000.0})
+    up_res = await client.put(f"/api/v1/cards/{card_id}", json={"due_day": 25, "total_limit": 15000.0})
     assert up_res.status_code == 200
+    assert up_res.json()["due_day"] == 25
     assert up_res.json()["total_limit"] == 15000.0
 
 

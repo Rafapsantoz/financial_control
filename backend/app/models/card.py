@@ -13,6 +13,7 @@ class Card(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     card_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    due_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     payment_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     total_limit: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
 

@@ -9,6 +9,7 @@ export interface Owner {
 export interface Card {
   id: number
   card_name: string
+  due_day?: number | null
   payment_date?: string | null
   total_limit?: number | null
   is_active: boolean

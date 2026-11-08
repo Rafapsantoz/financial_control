@@ -53,7 +53,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isCardModalOpen, setIsCardModalOpen] = useState(false)
   const [editingCard, setEditingCard] = useState<Card | null>(null)
   const [cardName, setCardName] = useState('')
-  const [cardPaymentDate, setCardPaymentDate] = useState('')
+  const [cardDueDay, setCardDueDay] = useState('')
   const [cardLimit, setCardLimit] = useState('')
 
   // Category Form State
@@ -142,12 +142,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (card) {
       setEditingCard(card)
       setCardName(card.card_name)
-      setCardPaymentDate(card.payment_date ? card.payment_date.split('T')[0] : '')
+      setCardDueDay(
+        card.due_day !== undefined && card.due_day !== null
+          ? String(card.due_day)
+          : card.payment_date
+          ? String(new Date(card.payment_date).getUTCDate())
+          : ''
+      )
       setCardLimit(card.total_limit !== undefined && card.total_limit !== null ? String(card.total_limit) : '')
     } else {
       setEditingCard(null)
       setCardName('')
-      setCardPaymentDate('')
+      setCardDueDay('')
       setCardLimit('')
     }
     setIsCardModalOpen(true)
@@ -160,23 +166,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       return
     }
 
+    const dueDayNum = cardDueDay ? parseInt(cardDueDay, 10) : null
+    if (dueDayNum !== null && (isNaN(dueDayNum) || dueDayNum < 1 || dueDayNum > 31)) {
+      setErrorMsg('O dia de vencimento deve estar entre 1 e 31.')
+      return
+    }
+
     try {
       setLoadingAction(true)
       clearFeedback()
       const limitVal = cardLimit ? parseFloat(cardLimit) : 0
-      const dateVal = cardPaymentDate ? `${cardPaymentDate}T00:00:00Z` : null
 
       if (editingCard) {
         await updateCard(editingCard.id, {
           card_name: cardName.trim(),
-          payment_date: dateVal,
+          due_day: dueDayNum,
           total_limit: limitVal,
         })
         setSuccessMsg(`Cartão "${cardName}" atualizado com sucesso!`)
       } else {
         await createCard({
           card_name: cardName.trim(),
-          payment_date: dateVal,
+          due_day: dueDayNum,
           total_limit: limitVal,
         })
         setSuccessMsg(`Cartão "${cardName}" cadastrado com sucesso!`)
@@ -491,10 +502,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <span>{card.card_name}</span>
                     </td>
                     <td className="py-3 px-4 text-slate-600 dark:text-slate-300 text-xs">
-                      {card.payment_date ? (
+                      {card.due_day ? (
+                        <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                          Todo dia {card.due_day}
+                        </span>
+                      ) : card.payment_date ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                          Vencimento: {formatDate(card.payment_date)}
+                          Dia {new Date(card.payment_date).getUTCDate()}
                         </span>
                       ) : (
                         <span className="text-slate-400 italic">Vencimento flexível</span>
@@ -695,14 +711,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Data de Vencimento / Fechamento
+                  Dia de Vencimento
                 </label>
                 <input
-                  type="date"
-                  value={cardPaymentDate}
-                  onChange={(e) => setCardPaymentDate(e.target.value)}
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Ex: 10 (todo dia 10)"
+                  value={cardDueDay}
+                  onChange={(e) => setCardDueDay(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100"
                 />
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  Dia do mês em que a fatura vence (1 a 31). O dia se repete todos os meses.
+                </p>
               </div>
 
               <div>

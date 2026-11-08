@@ -128,7 +128,7 @@ export async function fetchCards(): Promise<Card[]> {
   return res.json()
 }
 
-export async function createCard(data: { card_name: string; payment_date?: string | null; total_limit?: number }): Promise<Card> {
+export async function createCard(data: { card_name: string; due_day?: number | null; payment_date?: string | null; total_limit?: number }): Promise<Card> {
   const res = await fetch(`${BASE_URL}/cards`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -141,7 +141,7 @@ export async function createCard(data: { card_name: string; payment_date?: strin
   return res.json()
 }
 
-export async function updateCard(id: number, data: { card_name?: string; payment_date?: string | null; total_limit?: number }): Promise<Card> {
+export async function updateCard(id: number, data: { card_name?: string; due_day?: number | null; payment_date?: string | null; total_limit?: number }): Promise<Card> {
   const res = await fetch(`${BASE_URL}/cards/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

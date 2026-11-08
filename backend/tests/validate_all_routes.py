@@ -106,7 +106,7 @@ async def run_route_validation():
 
         # Criar
         total_checks += 1
-        res = await client.post("/api/v1/cards", json={"card_name": "Inter Black Teste", "payment_date": "2026-11-15T00:00:00", "total_limit": 15000.0})
+        res = await client.post("/api/v1/cards", json={"card_name": "Inter Black Teste", "due_day": 15, "total_limit": 15000.0})
         new_card = res.json()
         card_id = new_card.get("id")
         if print_result("/api/v1/cards", "POST", res.status_code, 201, f"Criado ID {card_id}"):

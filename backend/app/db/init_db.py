@@ -23,20 +23,31 @@ INITIAL_CATEGORIES = [
 ]
 
 INITIAL_CARDS = [
-    {"card_name": "Nubank", "total_limit": 5000.0, "payment_date": None},
+    {"card_name": "Nubank", "total_limit": 5000.0, "payment_date": None, "due_day": 10},
 ]
 
 
 async def init_db() -> None:
     """
     Initializes database tables and seeds standard records idempotently.
-    Enforces SQLite foreign keys and WAL mode.
+    Enforces SQLite foreign keys, WAL mode, and automatic schema migrations.
     """
     # 1. Create tables if they do not exist
     async with engine.begin() as conn:
         if "sqlite" in str(engine.url):
             await conn.execute(text("PRAGMA foreign_keys = ON;"))
         await conn.run_sync(Base.metadata.create_all)
+
+        # SQLite automatic migration check for due_day column
+        if "sqlite" in str(engine.url):
+            try:
+                res = await conn.execute(text("PRAGMA table_info(cards_fapp);"))
+                cols = [row[1] for row in res.fetchall()]
+                if "due_day" not in cols:
+                    await conn.execute(text("ALTER TABLE cards_fapp ADD COLUMN due_day INTEGER;"))
+                    logger.info("Migrated cards_fapp: added due_day column.")
+            except Exception as e:
+                logger.warning(f"Error checking/migrating cards_fapp table: {e}")
 
     # 2. Seed initial data idempotently
     async with AsyncSessionLocal() as session:
