@@ -294,6 +294,7 @@ export function App() {
         owners={owners}
         cards={cards}
         categories={categories}
+        currentMonth={currentMonth}
       />
     </div>
   )

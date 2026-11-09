@@ -106,6 +106,7 @@ export interface InvoiceConfirmItem {
 
 export interface InvoiceConfirmRequest {
   card_id?: number | null
+  target_month?: string | null
   project_future_installments?: boolean
   items: InvoiceConfirmItem[]
 }

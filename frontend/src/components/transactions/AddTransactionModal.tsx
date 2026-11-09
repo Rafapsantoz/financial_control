@@ -23,11 +23,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 }) => {
   if (!isOpen) return null
 
-  const todayStr = `${currentMonth}-01`
+  const defaultDate = (() => {
+    const today = new Date().toISOString().split('T')[0]
+    return today.startsWith(currentMonth) ? today : `${currentMonth}-01`
+  })()
 
   const [description, setDescription] = useState('')
   const [value, setValue] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0] || todayStr)
+  const [date, setDate] = useState(defaultDate)
   const [ownerId, setOwnerId] = useState<number>(owners[0]?.id || 1)
   const [cardId, setCardId] = useState<number | null>(cards[0]?.id || null)
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1)

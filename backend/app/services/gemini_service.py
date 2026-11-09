@@ -444,9 +444,23 @@ async def confirm_invoice_transactions(
                     )
                 checked_categories[eff_type_id] = True
 
+        # Determine transaction date aligned with target invoice month if provided
+        tx_dt = item.dt_lcto
+        tx_comment = item.comment
+        if request.target_month and re.match(r"^\d{4}-(0[1-9]|1[0-2])$", request.target_month.strip()):
+            import calendar
+            t_year, t_month = int(request.target_month[:4]), int(request.target_month[5:7])
+            if tx_dt.year != t_year or tx_dt.month != t_month:
+                max_days = calendar.monthrange(t_year, t_month)[1]
+                t_day = min(tx_dt.day, max_days)
+                orig_date_str = tx_dt.strftime("%d/%m/%Y")
+                tx_dt = tx_dt.replace(year=t_year, month=t_month, day=t_day)
+                note = f"Competência {t_month:02d}/{t_year} (Compra em {orig_date_str})"
+                tx_comment = f"{tx_comment} • {note}" if tx_comment else note
+
         # Create primary transaction for this installment
         primary_tx = Transaction(
-            dt_lcto=item.dt_lcto,
+            dt_lcto=tx_dt,
             description=item.description,
             value=item.value,
             owner_id=item.owner_id,
@@ -456,17 +470,17 @@ async def confirm_invoice_transactions(
             cur_parcs=item.cur_parcs,
             is_paid=item.is_paid,
             is_forecast=item.is_forecast,
-            comment=item.comment,
+            comment=tx_comment,
         )
         transactions_to_create.append(primary_tx)
 
         # Projections for future installments (RN01) if enabled
         if request.project_future_installments and item.total_parcs > item.cur_parcs:
             for p in range(item.cur_parcs + 1, item.total_parcs + 1):
-                future_dt = add_months(item.dt_lcto, p - item.cur_parcs)
+                future_dt = add_months(tx_dt, p - item.cur_parcs)
                 proj_comment = (
-                    f"{item.comment} (Projeção {p}/{item.total_parcs})"
-                    if item.comment
+                    f"{tx_comment} (Projeção {p}/{item.total_parcs})"
+                    if tx_comment
                     else f"Parcela projetada automaticamente ({p}/{item.total_parcs})"
                 )
                 proj_tx = Transaction(

@@ -1,5 +1,15 @@
 import React from 'react'
-import { CheckCircle2, Clock, Heart, Sparkles, User, AlertCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  Clock,
+  Heart,
+  Sparkles,
+  User,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+} from 'lucide-react'
 import { OwnerSummary } from '../../types'
 import { formatCurrency } from '../../lib/formatters'
 
@@ -60,28 +70,28 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
     switch (status) {
       case 'Pago':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-            <CheckCircle2 className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+            <CheckCircle2 className="w-3 h-3" />
             Quitado
           </span>
         )
       case 'Parcial':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-            <Clock className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+            <Clock className="w-3 h-3" />
             Parcial
           </span>
         )
       case 'Pendente':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-800">
-            <AlertCircle className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-800">
+            <AlertCircle className="w-3 h-3" />
             Pendente
           </span>
         )
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
             Sem despesas
           </span>
         )
@@ -89,7 +99,7 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {ownersSummary.map((owner) => {
         const config = getOwnerConfig(owner.owner_name)
         const Icon = config.icon
@@ -101,78 +111,110 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
           <div
             key={owner.owner_id}
             onClick={() => onSelectOwner(isSelected ? null : owner.owner_id)}
-            className={`bg-white dark:bg-slate-900 rounded-2xl border p-5 shadow-xs transition-all cursor-pointer relative overflow-hidden ${
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelectOwner(isSelected ? null : owner.owner_id)
+              }
+            }}
+            className={`bg-white dark:bg-slate-900 rounded-xl border shadow-xs transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between ${
               isSelected
-                ? 'ring-2 ring-emerald-500 border-emerald-500 shadow-md scale-[1.01]'
-                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
+                ? 'ring-2 ring-emerald-500 border-emerald-500 shadow-md bg-emerald-50/10 dark:bg-emerald-950/15'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
             }`}
           >
             {/* Top decorative gradient bar */}
-            <div className={`h-1.5 w-full bg-gradient-to-r ${config.color} absolute top-0 left-0`} />
+            <div className={`h-1 w-full bg-gradient-to-r ${config.color} absolute top-0 left-0`} />
 
-            {/* Header: Name, Avatar, Status */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${config.color} flex items-center justify-center text-white shadow-xs`}
-                >
-                  <Icon className="w-5 h-5" />
+            {/* COMPACT CARD CONTENT */}
+            <div className="p-4 pt-4.5">
+              {/* Header: Avatar, Name, Role, Status */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-lg bg-gradient-to-tr ${config.color} flex items-center justify-center text-white shadow-xs shrink-0`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
+                      {owner.owner_name}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{config.role}</p>
+                  </div>
                 </div>
+                <div className="shrink-0">{getStatusBadge(owner.status)}</div>
+              </div>
+
+              {/* Total Row */}
+              <div className="mt-3 flex items-baseline justify-between gap-2">
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">{owner.owner_name}</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">{config.role}</p>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 block leading-tight">
+                    Total na Fatura
+                  </span>
+                  <span className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                    {formatCurrency(owner.total_amount)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-medium bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                    {owner.transactions_count} {owner.transactions_count === 1 ? 'lançamento' : 'lançamentos'}
+                  </span>
+                  <div className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    {isSelected ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
                 </div>
               </div>
-              <div>{getStatusBadge(owner.status)}</div>
             </div>
 
-            {/* Total Due */}
-            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 mb-4 border border-slate-100 dark:border-slate-800">
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Total na Fatura
-              </p>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">
-                {formatCurrency(owner.total_amount)}
-              </p>
-            </div>
+            {/* EXPANDABLE DETAILS DRAWER (Visible when clicked / selected) */}
+            {isSelected && (
+              <div className="px-4 pb-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/60 animate-in fade-in duration-200 space-y-3">
+                {/* Details: Paid vs Pending */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-emerald-50/80 dark:bg-emerald-950/50 rounded-lg p-2 border border-emerald-200/60 dark:border-emerald-900/60">
+                    <p className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">Já Quitado</p>
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                      {formatCurrency(owner.paid_amount)}
+                    </p>
+                  </div>
+                  <div className="bg-rose-50/80 dark:bg-rose-950/50 rounded-lg p-2 border border-rose-200/60 dark:border-rose-900/60">
+                    <p className="text-[10px] font-semibold text-rose-800 dark:text-rose-300">Pendente</p>
+                    <p className="text-sm font-bold text-rose-700 dark:text-rose-400 mt-0.5">
+                      {formatCurrency(owner.pending_amount)}
+                    </p>
+                  </div>
+                </div>
 
-            {/* Details: Paid vs Pending */}
-            <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-              <div className="bg-emerald-50/60 dark:bg-emerald-950/40 rounded-lg p-2.5 border border-emerald-100 dark:border-emerald-900">
-                <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Já Quitado</p>
-                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                  {formatCurrency(owner.paid_amount)}
-                </p>
-              </div>
-              <div className="bg-rose-50/60 dark:bg-rose-950/40 rounded-lg p-2.5 border border-rose-100 dark:border-rose-900">
-                <p className="text-[11px] font-semibold text-rose-800 dark:text-rose-300">Pendente</p>
-                <p className="text-sm font-bold text-rose-700 dark:text-rose-400 mt-0.5">
-                  {formatCurrency(owner.pending_amount)}
-                </p>
-              </div>
-            </div>
+                {/* Progress Bar */}
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+                    <span>Progresso de Quitação</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{percentPaid}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${config.progressBar} transition-all duration-500`}
+                      style={{ width: `${percentPaid}%` }}
+                    />
+                  </div>
+                </div>
 
-            {/* Progress Bar */}
-            <div>
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5">
-                <span>Progresso de Quitação</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300">{percentPaid}%</span>
+                {/* Filter indicator & action */}
+                <div className="pt-1 flex items-center justify-between text-[11px]">
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <Filter className="w-3 h-3" />
+                    Filtrando tabela abaixo
+                  </span>
+                  <span className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium underline">
+                    Fechar detalhes ✕
+                  </span>
+                </div>
               </div>
-              <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${config.progressBar} transition-all duration-500`}
-                  style={{ width: `${percentPaid}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Footer with count */}
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-              <span>{owner.transactions_count} lançamentos</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline">
-                {isSelected ? 'Limpar filtro' : 'Ver despesas →'}
-              </span>
-            </div>
+            )}
           </div>
         )
       })}

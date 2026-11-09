@@ -115,6 +115,10 @@ class InvoiceConfirmItem(BaseModel):
 
 class InvoiceConfirmRequest(BaseModel):
     card_id: Optional[int] = Field(default=None, description="ID do cartão padrão para itens sem card_id explícito")
+    target_month: Optional[str] = Field(
+        default=None,
+        description="Mês e ano da fatura de competência (formato YYYY-MM, ex: 2026-11). Se fornecido, alinha os lançamentos à fatura.",
+    )
     project_future_installments: bool = Field(
         default=False,
         description="Se True, gera previsões de parcelas futuras (is_forecast=True) para compras parceladas",

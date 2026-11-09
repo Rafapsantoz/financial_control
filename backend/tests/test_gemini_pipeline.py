@@ -422,6 +422,46 @@ async def test_confirm_invoice_batch_success(client: AsyncClient, db_session: As
 
 
 @pytest.mark.asyncio
+async def test_confirm_invoice_with_target_month_alignment(client: AsyncClient, db_session: AsyncSession):
+    """
+    Tests that when target_month is provided, transactions with purchase_date from previous
+    months (common in credit card invoice cycles) have their dt_lcto aligned to the target invoice month.
+    """
+    payload = {
+        "card_id": 1,
+        "target_month": "2026-11",
+        "items": [
+            {
+                "purchase_date": "2026-10-15",
+                "description": "Shein Roupa Nova",
+                "value": 99.90,
+                "owner_id": 3,
+                "type_id": 5,
+                "total_parcs": 1,
+                "cur_parcs": 1,
+            }
+        ],
+    }
+
+    response = await client.post("/api/v1/invoices/confirm", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["confirmed_count"] == 1
+
+    created_tx = data["created_transactions"][0]
+    # Verify date is aligned to November 2026 (month 11)
+    assert created_tx["dt_lcto"].startswith("2026-11-15")
+    assert "2026" in created_tx["comment"]
+
+    # Verify it is queried in November dashboard summary
+    dash_res = await client.get("/api/v1/dashboard/summary?month=2026-11")
+    assert dash_res.status_code == 200
+    dash_data = dash_res.json()
+    irma_summary = next(o for o in dash_data["owners_summary"] if o["owner_id"] == 3)
+    assert irma_summary["total_amount"] >= 99.90
+
+
+@pytest.mark.asyncio
 async def test_confirm_invoice_with_future_installments_projection(client: AsyncClient, db_session: AsyncSession):
     """
     Tests installment projection (RN01) during confirmation:

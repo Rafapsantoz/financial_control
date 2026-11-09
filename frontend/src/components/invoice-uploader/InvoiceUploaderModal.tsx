@@ -23,6 +23,7 @@ interface InvoiceUploaderModalProps {
   owners: Owner[]
   cards: Card[]
   categories: Category[]
+  currentMonth: string
 }
 
 export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
@@ -32,11 +33,13 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
   owners,
   cards,
   categories,
+  currentMonth,
 }) => {
   if (!isOpen) return null
 
   const [file, setFile] = useState<File | null>(null)
   const [selectedCardId, setSelectedCardId] = useState<number | null>(cards[0]?.id || null)
+  const [targetMonth, setTargetMonth] = useState<string>(currentMonth)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedInvoiceResponse | null>(null)
@@ -69,6 +72,11 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
       setErrorMsg('')
       const result = await extractInvoiceFromPDF(file, selectedCardId)
       setExtractedData(result)
+      if (result.invoice_month_year && /^\d{4}-(0[1-9]|1[0-2])$/.test(result.invoice_month_year)) {
+        setTargetMonth(result.invoice_month_year)
+      } else {
+        setTargetMonth(currentMonth)
+      }
 
       // Initialize review items with heuristics
       const defaultOwner = owners[0]?.id || 1
@@ -122,6 +130,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
 
       const payload = {
         card_id: extractedData?.card_id || selectedCardId,
+        target_month: targetMonth || currentMonth,
         project_future_installments: false,
         items: selectedToPersist.map((item) => ({
           purchase_date: item.purchase_date,
@@ -289,11 +298,15 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                     {extractedData.bank_or_issuer || 'Cartão de Crédito'}
                   </span>
                 </div>
-                <div>
+                <div className="flex items-center gap-1.5">
                   <span className="text-slate-400 dark:text-slate-500">Mês da Fatura:</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 ml-1.5">
-                    {extractedData.invoice_month_year || 'Atual'}
-                  </span>
+                  <input
+                    type="month"
+                    value={targetMonth}
+                    onChange={(e) => setTargetMonth(e.target.value)}
+                    className="px-2 py-0.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    title="Mês/Ano em que as compras serão contabilizadas no rateio"
+                  />
                 </div>
                 <div>
                   <span className="text-slate-400 dark:text-slate-500">Total Fatura:</span>
@@ -371,8 +384,18 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                           </td>
 
                           {/* Date */}
-                          <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 dark:text-slate-300">
-                            {item.purchase_date}
+                          <td className="py-2 px-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                            <input
+                              type="date"
+                              value={item.purchase_date}
+                              onChange={(e) => {
+                                const newDate = e.target.value
+                                setEditedItems((prev) =>
+                                  prev.map((it, idx) => (idx === index ? { ...it, purchase_date: newDate } : it))
+                                )
+                              }}
+                              className="px-1.5 py-0.5 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-800 bg-transparent text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+                            />
                           </td>
 
                           {/* Description */}
