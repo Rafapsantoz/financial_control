@@ -20,6 +20,7 @@ import {
   Target,
   Trash2,
   TrendingUp,
+  X,
 } from 'lucide-react'
 import { FinancialPrinciple, Goal, LivingScenario } from '../../types'
 import {
@@ -46,6 +47,10 @@ export const BudgetAnalysisTab: React.FC = () => {
   const [newCategory, setNewCategory] = useState('Essencial')
   const [newPriority, setNewPriority] = useState('Média')
   const [newComment, setNewComment] = useState('')
+
+  // Goal Deletion State
+  const [goalToDelete, setGoalToDelete] = useState<Goal | null>(null)
+  const [isDeletingGoal, setIsDeletingGoal] = useState<boolean>(false)
 
   // Expandable principles
   const [expandedPrinciples, setExpandedPrinciples] = useState<Record<number, boolean>>({})
@@ -84,13 +89,17 @@ export const BudgetAnalysisTab: React.FC = () => {
     }
   }
 
-  const handleDeleteGoal = async (id: number) => {
-    if (!window.confirm('Deseja excluir esta meta da wishlist?')) return
+  const handleConfirmDeleteGoal = async () => {
+    if (!goalToDelete) return
     try {
-      await deleteGoal(id)
+      setIsDeletingGoal(true)
+      await deleteGoal(goalToDelete.id)
+      setGoalToDelete(null)
       await loadData()
     } catch (err: any) {
-      alert(`Erro ao excluir meta: ${err.message}`)
+      alert(`Erro ao excluir meta da wishlist: ${err.message}`)
+    } finally {
+      setIsDeletingGoal(false)
     }
   }
 
@@ -256,9 +265,9 @@ export const BudgetAnalysisTab: React.FC = () => {
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteGoal(g.id)}
+                      onClick={() => setGoalToDelete(g)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                      title="Excluir item"
+                      title={`Excluir "${g.title}" da lista de desejos`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -523,6 +532,88 @@ export const BudgetAnalysisTab: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Customizado de Exclusão da Wishlist / Meta */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 pb-4 flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  Excluir da Lista de Desejos?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Esta ação removerá o objetivo do seu planejamento financeiro.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGoalToDelete(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Item Card Preview */}
+            <div className="px-6 py-3">
+              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
+                    {goalToDelete.title}
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {goalToDelete.category} • {goalToDelete.priority}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>
+                    Guardado: <b className="text-slate-700 dark:text-slate-300">{formatCurrency(goalToDelete.saved_amount)}</b>
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    Alvo: {formatCurrency(goalToDelete.target_amount)}
+                  </span>
+                </div>
+                {goalToDelete.comment && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 italic pt-1 truncate">
+                    "{goalToDelete.comment}"
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-3 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                O histórico e o progresso acumulado deste item serão descartados.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setGoalToDelete(null)}
+                disabled={isDeletingGoal}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteGoal}
+                disabled={isDeletingGoal}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-xl shadow-xs shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isDeletingGoal ? 'Excluindo...' : 'Sim, Excluir Meta'}
+              </button>
+            </div>
           </div>
         </div>
       )}
