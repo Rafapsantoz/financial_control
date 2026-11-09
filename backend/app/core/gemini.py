@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import List, Optional
 from fastapi import HTTPException, status
 from google import genai
 from google.genai import types
@@ -10,7 +10,16 @@ from app.schemas.invoice import ExtractedInvoiceResponse
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+
+# Lista ordenada de modelos para fallback automático em caso de 503 (alta demanda) ou 404
+FALLBACK_CANDIDATE_MODELS: List[str] = [
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3-flash-preview",
+    "gemini-3.8-flash",
+]
 
 EXTRACTION_SYSTEM_INSTRUCTION = (
     "Você é um especialista contábil e de extração de dados financeiros de alta precisão. "
@@ -53,7 +62,7 @@ async def call_gemini_structured_extraction(
     """
     Sends PDF bytes to Gemini API using async structured generation.
     Returns validated ExtractedInvoiceResponse.
-    Handles network, quota, and parsing errors with HTTP 502/503.
+    Implements automatic multi-model fallback cascade in case of 503 high-demand or 404 model retirement.
     """
     if not pdf_bytes:
         raise HTTPException(
@@ -61,7 +70,14 @@ async def call_gemini_structured_extraction(
             detail="Arquivo PDF vazio fornecido para extração.",
         )
 
-    effective_model = model_name or getattr(settings, "GEMINI_MODEL", None) or DEFAULT_GEMINI_MODEL
+    primary_model = model_name or getattr(settings, "GEMINI_MODEL", None) or DEFAULT_GEMINI_MODEL
+
+    # Monta a esteira ordenada de modelos sem duplicações
+    models_to_try: List[str] = [primary_model]
+    for candidate in FALLBACK_CANDIDATE_MODELS:
+        if candidate not in models_to_try:
+            models_to_try.append(candidate)
+
     genai_client = client or get_gemini_client()
 
     pdf_part = types.Part.from_bytes(
@@ -76,35 +92,60 @@ async def call_gemini_structured_extraction(
         temperature=0.1,
     )
 
-    try:
-        response = await genai_client.aio.models.generate_content(
-            model=effective_model,
-            contents=[pdf_part, EXTRACTION_PROMPT],
-            config=config,
-        )
-    except APIError as e:
-        logger.error(f"Gemini API Error: {e}")
-        err_code = getattr(e, "code", None)
-        err_str = str(e).lower()
+    response = None
+    last_error: Optional[Exception] = None
+
+    for attempt_model in models_to_try:
+        try:
+            logger.info(f"Tentando extração de fatura via Gemini com o modelo: {attempt_model}")
+            response = await genai_client.aio.models.generate_content(
+                model=attempt_model,
+                contents=[pdf_part, EXTRACTION_PROMPT],
+                config=config,
+            )
+            # Se a resposta foi gerada com sucesso, interrompe a esteira de fallback
+            logger.info(f"Extração bem-sucedida utilizando o modelo: {attempt_model}")
+            break
+        except APIError as e:
+            err_code = getattr(e, "code", None)
+            err_str = str(e).lower()
+            last_error = e
+            logger.warning(
+                f"Modelo '{attempt_model}' falhou com APIError (código {err_code}): {e}. "
+                f"Avaliando fallback para próximo modelo da esteira..."
+            )
+
+            # Fallback automático para 503 (alta demanda), 404 (modelo descontinuado) ou 429
+            if err_code in (503, 404, 429) or "503" in err_str or "unavailable" in err_str or "high demand" in err_str or "404" in err_str:
+                continue
+
+            # Para outros erros que não são de capacidade/disponibilidade do modelo, interrompe
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Erro retornado pela API do Gemini ({attempt_model}): {e}",
+            )
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Erro inesperado no modelo '{attempt_model}': {e}. Tentando fallback...")
+            continue
+
+    if response is None:
+        logger.error(f"Todos os modelos da esteira de fallback falharam. Último erro: {last_error}")
+        err_code = getattr(last_error, "code", None) if last_error else None
+        err_str = str(last_error).lower() if last_error else ""
         if err_code == 429 or "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Cota de requisições do Gemini excedida ou rate limit atingido (429): {e}",
+                detail=f"Cota de requisições do Gemini excedida ou rate limit atingido (429): {last_error}",
             )
-        if err_code == 503 or "503" in err_str or "unavailable" in err_str:
+        if err_code == 503 or "503" in err_str or "unavailable" in err_str or "high demand" in err_str:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Serviço Gemini temporariamente indisponível (503): {e}",
+                detail="Serviço Gemini temporariamente indisponível por alta demanda (503). Por favor, aguarde alguns segundos e tente novamente.",
             )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Erro retornado pela API do Gemini: {e}",
-        )
-    except Exception as e:
-        logger.error(f"Erro inesperado ao chamar API do Gemini: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Falha de comunicação com a API do Gemini: {str(e)}",
+            detail=f"Falha de comunicação com a API do Gemini após tentar múltiplos modelos ({', '.join(models_to_try)}): {last_error}",
         )
 
     # Parse and validate structured output

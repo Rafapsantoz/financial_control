@@ -262,7 +262,7 @@ export function App() {
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 mt-8 transition-colors">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 dark:text-slate-500">
-          RPsec Financeiro • Backend FastAPI + SQLite • Inteligência Artificial Google Gemini 3.8 Flash
+          RPsec Financeiro • Backend FastAPI + SQLite • Inteligência Artificial Google Gemini 3.5 Flash
         </div>
       </footer>
 

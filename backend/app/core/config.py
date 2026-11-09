@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GITHUB_TOKEN: str = ""
-    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
 
     # Database Settings
     USE_SQLITE: bool = True
