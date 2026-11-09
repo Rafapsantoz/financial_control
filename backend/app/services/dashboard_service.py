@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -54,10 +54,17 @@ async def get_dashboard_summary(
     else:
         end_date = datetime(year, month_num + 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
-    # 4. Query transactions: within month, non-forecast, optional card_id
+    # 4. Query transactions: matches invoice_month == month OR (invoice_month is None and dt_lcto within month)
+    month_filter = or_(
+        Transaction.invoice_month == month,
+        and_(
+            Transaction.invoice_month.is_(None),
+            Transaction.dt_lcto >= start_date,
+            Transaction.dt_lcto < end_date,
+        ),
+    )
     stmt = select(Transaction).where(
-        Transaction.dt_lcto >= start_date,
-        Transaction.dt_lcto < end_date,
+        month_filter,
         Transaction.is_forecast == False,
     )
     if card_id is not None:

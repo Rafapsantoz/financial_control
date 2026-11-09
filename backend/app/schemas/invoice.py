@@ -57,6 +57,7 @@ class InvoiceConfirmItem(BaseModel):
     total_parcs: int = Field(default=1, ge=1, description="Total de parcelas")
     cur_parcs: int = Field(default=1, ge=1, description="Parcela atual")
     comment: Optional[str] = Field(default=None, max_length=500, description="Observação livre")
+    invoice_month: Optional[str] = Field(default=None, description="Mês da fatura de competência (YYYY-MM)")
     is_paid: bool = Field(default=False, description="Status de quitação da dívida pelo responsável")
     is_forecast: bool = Field(default=False, description="Indica se é parcela projetada para faturas futuras")
 

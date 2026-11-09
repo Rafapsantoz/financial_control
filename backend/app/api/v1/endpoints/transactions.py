@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from app.core.database import get_db
 from app.models.transaction import Transaction
@@ -43,7 +43,7 @@ async def list_transactions(
     """
     query = select(Transaction)
 
-    # Date range filtering for month (index-friendly and timezone-safe)
+    # Date range filtering for month (supports invoice_month billing cycle or dt_lcto fallback)
     if month:
         year_str, month_str = month.split("-")
         year = int(year_str)
@@ -54,7 +54,15 @@ async def list_transactions(
         else:
             end_date = datetime(year, month_num + 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
-        query = query.where(Transaction.dt_lcto >= start_date, Transaction.dt_lcto < end_date)
+        month_filter = or_(
+            Transaction.invoice_month == month,
+            and_(
+                Transaction.invoice_month.is_(None),
+                Transaction.dt_lcto >= start_date,
+                Transaction.dt_lcto < end_date,
+            ),
+        )
+        query = query.where(month_filter)
 
     if card_id is not None:
         query = query.where(Transaction.card_id == card_id)
@@ -109,7 +117,11 @@ async def create_transaction(
                 detail=f"Categoria com ID {tx_in.type_id} não existe.",
             )
 
-    db_tx = Transaction(**tx_in.model_dump())
+    tx_dict = tx_in.model_dump()
+    if not tx_dict.get("invoice_month") and tx_in.dt_lcto:
+        tx_dict["invoice_month"] = tx_in.dt_lcto.strftime("%Y-%m")
+
+    db_tx = Transaction(**tx_dict)
     db.add(db_tx)
     await db.commit()
     await db.refresh(db_tx)

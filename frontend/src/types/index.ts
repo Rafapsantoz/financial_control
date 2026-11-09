@@ -33,6 +33,7 @@ export interface Transaction {
   total_parcs: number
   is_paid: boolean
   is_forecast: boolean
+  invoice_month?: string | null
   comment?: string | null
   created_at: string
   updated_at?: string | null
@@ -101,6 +102,7 @@ export interface InvoiceConfirmItem {
   total_parcs?: number
   is_paid?: boolean
   is_forecast?: boolean
+  invoice_month?: string | null
   comment?: string | null
 }
 

@@ -317,7 +317,10 @@ async def compute_macro_projection(
     categories_matrix: Dict[str, Dict[str, float]] = {name: {f"{m:02d}": 0.0 for m in range(1, 13)} for name in cats_map.values()}
 
     for tx in transactions:
-        m_key = f"{tx.dt_lcto.month:02d}"
+        if tx.invoice_month and len(tx.invoice_month) >= 7 and tx.invoice_month.startswith(str(year)):
+            m_key = tx.invoice_month[5:7]
+        else:
+            m_key = f"{tx.dt_lcto.month:02d}"
         val = round(tx.value, 2)
         db_monthly_sums[m_key]["total"] += val
         if tx.is_paid:

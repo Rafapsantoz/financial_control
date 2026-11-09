@@ -59,6 +59,16 @@ async def init_db() -> None:
             except Exception as e:
                 logger.warning(f"Error checking/migrating cards_fapp table: {e}")
 
+            # SQLite automatic migration check for invoice_month column in transactions_fapp
+            try:
+                res_tx = await conn.execute(text("PRAGMA table_info(transactions_fapp);"))
+                cols_tx = [row[1] for row in res_tx.fetchall()]
+                if "invoice_month" not in cols_tx:
+                    await conn.execute(text("ALTER TABLE transactions_fapp ADD COLUMN invoice_month VARCHAR(7);"))
+                    logger.info("Migrated transactions_fapp: added invoice_month column.")
+            except Exception as e:
+                logger.warning(f"Error checking/migrating transactions_fapp table: {e}")
+
     # 2. Seed initial data idempotently
     async with AsyncSessionLocal() as session:
         # Seed Owners

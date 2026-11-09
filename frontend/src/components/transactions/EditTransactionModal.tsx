@@ -28,6 +28,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [date, setDate] = useState(
     transaction.dt_lcto ? transaction.dt_lcto.split('T')[0] : new Date().toISOString().split('T')[0]
   )
+  const [invoiceMonth, setInvoiceMonth] = useState<string>(
+    transaction.invoice_month || (transaction.dt_lcto ? transaction.dt_lcto.slice(0, 7) : '')
+  )
   const [ownerId, setOwnerId] = useState<number>(transaction.owner_id || owners[0]?.id || 1)
   const [cardId, setCardId] = useState<number | null>(transaction.card_id || null)
   const [categoryId, setCategoryId] = useState<number>(transaction.type_id || categories[0]?.id || 1)
@@ -44,6 +47,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setDescription(transaction.description || '')
       setValue(String(transaction.value || ''))
       setDate(transaction.dt_lcto ? transaction.dt_lcto.split('T')[0] : '')
+      setInvoiceMonth(transaction.invoice_month || (transaction.dt_lcto ? transaction.dt_lcto.slice(0, 7) : ''))
       setOwnerId(transaction.owner_id || owners[0]?.id || 1)
       setCardId(transaction.card_id || null)
       setCategoryId(transaction.type_id || categories[0]?.id || 1)
@@ -81,6 +85,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         description: description.trim(),
         value: numVal,
         dt_lcto: `${date}T12:00:00Z`,
+        invoice_month: invoiceMonth || date.slice(0, 7),
         owner_id: ownerId,
         card_id: cardId,
         type_id: categoryId,
@@ -142,8 +147,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             />
           </div>
 
-          {/* Valor e Data */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Valor, Data da Compra e Fatura de Cobrança */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Valor Total (R$) *
@@ -160,7 +165,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Data do Lançamento *
+                Data da Compra *
               </label>
               <input
                 type="date"
@@ -168,6 +173,19 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Fatura (Cobrança) *
+              </label>
+              <input
+                type="month"
+                required
+                value={invoiceMonth}
+                onChange={(e) => setInvoiceMonth(e.target.value)}
+                className="w-full px-3 py-2 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100"
+                title="Mês da fatura em que este valor será cobrado/pago"
               />
             </div>
           </div>

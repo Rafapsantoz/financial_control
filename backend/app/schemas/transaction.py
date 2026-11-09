@@ -17,6 +17,7 @@ class TransactionBase(BaseModel):
     total_parcs: int = Field(default=1, ge=1, description="Total de parcelas (ex: 1 para à vista, 10 para 10x)")
     cur_parcs: int = Field(default=1, ge=1, description="Parcela atual (ex: 1, 2, 3...)")
     comment: Optional[str] = Field(default=None, max_length=500, description="Observação livre")
+    invoice_month: Optional[str] = Field(default=None, description="Mês da fatura em que a conta será paga (YYYY-MM)")
     is_paid: bool = Field(default=False, description="Status de quitação da dívida pelo responsável")
     is_forecast: bool = Field(default=False, description="Indica se é parcela projetada para faturas futuras")
 
@@ -56,6 +57,7 @@ class TransactionUpdate(BaseModel):
     total_parcs: Optional[int] = Field(default=None, ge=1)
     cur_parcs: Optional[int] = Field(default=None, ge=1)
     comment: Optional[str] = Field(default=None, max_length=500)
+    invoice_month: Optional[str] = None
     is_paid: Optional[bool] = None
     is_forecast: Optional[bool] = None
 

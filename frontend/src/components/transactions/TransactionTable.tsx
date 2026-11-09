@@ -19,6 +19,7 @@ interface TransactionTableProps {
   owners: Owner[]
   cards: Card[]
   categories: Category[]
+  currentMonth?: string
   selectedOwnerId: number | null
   onSelectOwner: (ownerId: number | null) => void
   onTogglePaid: (id: number) => void
@@ -27,11 +28,25 @@ interface TransactionTableProps {
   isUpdatingId?: number | null
 }
 
+const MONTH_NAMES_SHORT = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+]
+
+const formatInvoiceBadge = (invoiceMonth: string) => {
+  const parts = invoiceMonth.split('-')
+  if (parts.length >= 2) {
+    const idx = parseInt(parts[1], 10) - 1
+    return `Fatura ${MONTH_NAMES_SHORT[idx] || parts[1]}/${parts[0].slice(2)}`
+  }
+  return `Fatura ${invoiceMonth}`
+}
+
 export const TransactionTable: React.FC<TransactionTableProps> = ({
   transactions,
   owners,
   cards,
   categories,
+  currentMonth,
   selectedOwnerId,
   onSelectOwner,
   onTogglePaid,
@@ -245,8 +260,20 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     }`}
                   >
                     {/* Date */}
-                    <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {formatDate(tx.dt_lcto)}
+                    <td className="py-3 px-4 text-xs whitespace-nowrap">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {formatDate(tx.dt_lcto)}
+                      </div>
+                      {tx.invoice_month && tx.dt_lcto && tx.dt_lcto.slice(0, 7) !== tx.invoice_month && (
+                        <div className="mt-1">
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                            title={`Compra realizada em ${formatDate(tx.dt_lcto)}, cobrada na fatura de ${formatInvoiceBadge(tx.invoice_month)}`}
+                          >
+                            {formatInvoiceBadge(tx.invoice_month)}
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Description */}

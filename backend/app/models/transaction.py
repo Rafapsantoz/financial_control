@@ -47,9 +47,10 @@ class Transaction(Base):
     total_parcs: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     cur_parcs: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
-    # Status flags
+    # Status & Billing cycle flags
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0", index=True)
     is_forecast: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0", index=True)
+    invoice_month: Mapped[Optional[str]] = mapped_column(String(7), nullable=True, index=True)
     comment: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Relationships configured with selectin loading to prevent MissingGreenlet

@@ -424,8 +424,10 @@ async def test_confirm_invoice_batch_success(client: AsyncClient, db_session: As
 @pytest.mark.asyncio
 async def test_confirm_invoice_with_target_month_alignment(client: AsyncClient, db_session: AsyncSession):
     """
-    Tests that when target_month is provided, transactions with purchase_date from previous
-    months (common in credit card invoice cycles) have their dt_lcto aligned to the target invoice month.
+    Tests that when target_month is provided:
+    1. The actual purchase date (dt_lcto) from October is preserved (e.g. 2026-10-15).
+    2. The billing cycle (invoice_month) is set to the target invoice month (2026-11).
+    3. The transaction is correctly included in the November dashboard and transaction list.
     """
     payload = {
         "card_id": 1,
@@ -449,9 +451,23 @@ async def test_confirm_invoice_with_target_month_alignment(client: AsyncClient, 
     assert data["confirmed_count"] == 1
 
     created_tx = data["created_transactions"][0]
-    # Verify date is aligned to November 2026 (month 11)
-    assert created_tx["dt_lcto"].startswith("2026-11-15")
-    assert "2026" in created_tx["comment"]
+    # Real purchase date is preserved
+    assert created_tx["dt_lcto"].startswith("2026-10-15")
+    # Invoice month is November 2026
+    assert created_tx["invoice_month"] == "2026-11"
+
+    # Verify it is queried in November dashboard summary
+    dash_res = await client.get("/api/v1/dashboard/summary?month=2026-11")
+    assert dash_res.status_code == 200
+    dash_data = dash_res.json()
+    irma_summary = next(o for o in dash_data["owners_summary"] if o["owner_id"] == 3)
+    assert irma_summary["total_amount"] >= 99.90
+
+    # Verify it is queried in GET /api/v1/transactions?month=2026-11
+    tx_res = await client.get("/api/v1/transactions?month=2026-11")
+    assert tx_res.status_code == 200
+    tx_list = tx_res.json()
+    assert any(t["description"] == "Shein Roupa Nova" for t in tx_list)
 
     # Verify it is queried in November dashboard summary
     dash_res = await client.get("/api/v1/dashboard/summary?month=2026-11")

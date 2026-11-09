@@ -280,6 +280,18 @@ def add_months(dt: datetime, n: int) -> datetime:
     return dt.replace(year=year, month=month, day=day)
 
 
+def add_months_to_str(month_str: str, n: int) -> str:
+    """Safely adds n months to a YYYY-MM string."""
+    try:
+        y, m = int(month_str[:4]), int(month_str[5:7])
+        total_m = m - 1 + n
+        new_y = y + total_m // 12
+        new_m = total_m % 12 + 1
+        return f"{new_y:04d}-{new_m:02d}"
+    except Exception:
+        return month_str
+
+
 async def extract_invoice_from_pdf(
     db: AsyncSession,
     pdf_bytes: bytes,
@@ -444,19 +456,17 @@ async def confirm_invoice_transactions(
                     )
                 checked_categories[eff_type_id] = True
 
-        # Determine transaction date aligned with target invoice month if provided
+        # Resolve target invoice month for billing cycle
+        eff_invoice_month = None
+        if request.target_month and re.match(r"^\d{4}-(0[1-9]|1[0-2])$", request.target_month.strip()):
+            eff_invoice_month = request.target_month.strip()
+        elif item.invoice_month and re.match(r"^\d{4}-(0[1-9]|1[0-2])$", item.invoice_month.strip()):
+            eff_invoice_month = item.invoice_month.strip()
+        elif item.dt_lcto:
+            eff_invoice_month = item.dt_lcto.strftime("%Y-%m")
+
         tx_dt = item.dt_lcto
         tx_comment = item.comment
-        if request.target_month and re.match(r"^\d{4}-(0[1-9]|1[0-2])$", request.target_month.strip()):
-            import calendar
-            t_year, t_month = int(request.target_month[:4]), int(request.target_month[5:7])
-            if tx_dt.year != t_year or tx_dt.month != t_month:
-                max_days = calendar.monthrange(t_year, t_month)[1]
-                t_day = min(tx_dt.day, max_days)
-                orig_date_str = tx_dt.strftime("%d/%m/%Y")
-                tx_dt = tx_dt.replace(year=t_year, month=t_month, day=t_day)
-                note = f"Competência {t_month:02d}/{t_year} (Compra em {orig_date_str})"
-                tx_comment = f"{tx_comment} • {note}" if tx_comment else note
 
         # Create primary transaction for this installment
         primary_tx = Transaction(
@@ -470,6 +480,7 @@ async def confirm_invoice_transactions(
             cur_parcs=item.cur_parcs,
             is_paid=item.is_paid,
             is_forecast=item.is_forecast,
+            invoice_month=eff_invoice_month,
             comment=tx_comment,
         )
         transactions_to_create.append(primary_tx)
@@ -478,6 +489,11 @@ async def confirm_invoice_transactions(
         if request.project_future_installments and item.total_parcs > item.cur_parcs:
             for p in range(item.cur_parcs + 1, item.total_parcs + 1):
                 future_dt = add_months(tx_dt, p - item.cur_parcs)
+                future_inv_month = (
+                    add_months_to_str(eff_invoice_month, p - item.cur_parcs)
+                    if eff_invoice_month
+                    else future_dt.strftime("%Y-%m")
+                )
                 proj_comment = (
                     f"{tx_comment} (Projeção {p}/{item.total_parcs})"
                     if tx_comment
@@ -494,6 +510,7 @@ async def confirm_invoice_transactions(
                     cur_parcs=p,
                     is_paid=False,
                     is_forecast=True,
+                    invoice_month=future_inv_month,
                     comment=proj_comment,
                 )
                 transactions_to_create.append(proj_tx)
