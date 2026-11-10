@@ -183,7 +183,7 @@ export function App() {
                     Rateio Familiar da Fatura
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Divisão individual dos gastos entre Rafael, Mãe e Irmã (RN03)
+                    Divisão individual dos gastos entre os membros cadastrados (RN03)
                   </p>
                 </div>
                 {selectedOwnerId !== null && (

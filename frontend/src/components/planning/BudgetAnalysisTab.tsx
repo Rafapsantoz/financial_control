@@ -216,7 +216,7 @@ export const BudgetAnalysisTab: React.FC = () => {
               </h3>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Itens da sua planilha (Cortina, Mesa, Robô aspirador, etc.) acompanhados com meta e progresso
+              Itens e metas financeiras acompanhados com objetivo e progresso de poupança
             </p>
           </div>
 

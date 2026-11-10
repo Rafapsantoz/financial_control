@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -22,100 +22,9 @@ MONTH_NAMES = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ]
 
-# Dados base recorrentes mapeados diretamente da planilha do usuário
-SPREADSHEET_FIXED_DEFAULTS = [
-    {
-        "name": "Casa 20 (Aluguel/Condomínio)",
-        "category": "Moradia",
-        "responsible": "Rafael",
-        "values": {
-            "05": 1129.44, "06": 1129.44, "07": 190.24, "08": 939.20,
-            "09": 1174.20, "10": 1174.20, "11": 1174.20, "12": 1174.20
-        }
-    },
-    {
-        "name": "Custo Fixo Pessoal (Mercado, Carro, Cães)",
-        "category": "Essencial",
-        "responsible": "Rafael",
-        "values": {
-            "01": 1540.0, "02": 1540.0, "03": 1540.0, "04": 1540.0,
-            "05": 1540.0, "06": 1540.0, "07": 1540.0, "08": 1540.0,
-            "09": 1540.0, "10": 1540.0, "11": 1540.0, "12": 1540.0
-        }
-    },
-    {
-        "name": "Imposto MEI / DAS",
-        "category": "Impostos",
-        "responsible": "Rafael",
-        "values": {
-            "05": 821.60, "06": 150.00, "07": 380.00, "08": 184.00,
-            "09": 276.80, "10": 620.00, "11": 620.00, "12": 620.00
-        }
-    },
-    {
-        "name": "Internet Fibra - dia 10",
-        "category": "Telecom",
-        "responsible": "Rafael",
-        "values": {
-            "05": 78.90, "06": 78.90, "07": 78.90, "08": 49.90,
-            "09": 49.90, "10": 150.00, "11": 150.00, "12": 49.90
-        }
-    },
-    {
-        "name": "Claro Celular",
-        "category": "Telecom",
-        "responsible": "Rafael",
-        "values": {
-            "05": 44.90, "06": 44.90, "08": 45.00, "09": 45.00,
-            "11": 45.00, "12": 45.00
-        }
-    },
-    {
-        "name": "Documento Carro - 23",
-        "category": "Transporte",
-        "responsible": "Rafael",
-        "values": {
-            "07": 87.25, "11": 174.08
-        }
-    },
-    {
-        "name": "Investimento na Carreira",
-        "category": "Educação",
-        "responsible": "Rafael",
-        "values": {
-            "07": 126.67, "09": 332.58, "10": 332.58, "11": 332.58, "12": 332.58
-        }
-    },
-]
-
-SPREADSHEET_CARD_DEFAULTS = [
-    {
-        "name": "PicPay",
-        "category": "Cartão de Crédito",
-        "responsible": "Rafael",
-        "values": {
-            "05": 2133.58, "06": 2159.84, "07": 1592.36, "08": 2381.97,
-            "09": 2821.97, "10": 2430.45, "11": 88.22
-        }
-    },
-    {
-        "name": "Mercado Pago",
-        "category": "Cartão de Crédito",
-        "responsible": "Rafael",
-        "values": {
-            "05": 132.26, "06": 2601.39, "07": 2521.96
-        }
-    },
-    {
-        "name": "Nubank Empresa",
-        "category": "Cartão de Crédito",
-        "responsible": "Rafael",
-        "values": {
-            "05": 1814.43, "06": 1837.46, "07": 2095.31, "08": 1244.80,
-            "09": 1006.91, "10": 825.67, "11": 200.83
-        }
-    },
-]
+# Custos fixos e cartões agora são 100% dinâmicos, derivados dos cartões e transações reais do banco
+SPREADSHEET_FIXED_DEFAULTS: List[Dict] = []
+SPREADSHEET_CARD_DEFAULTS: List[Dict] = []
 
 SPREADSHEET_PRINCIPLES: List[Dict[str, any]] = [
     {
@@ -250,168 +159,201 @@ SPREADSHEET_SCENARIOS = [
 async def compute_macro_projection(
     db: AsyncSession,
     year: int = 2026,
-    account_balance: float = 16638.40,
+    account_balance: float = 0.0,
 ) -> MacroProjectionResponse:
     """
-    Computa a matriz anual completa de 12 meses (Janeiro a Dezembro),
-    combinando as contas fixas, faturas de cartão, compras parceladas e
-    as transações persistidas no banco, calculando o Runway de sobrevivência.
+    Computa a matriz anual completa de 12 meses (Janeiro a Dezembro)
+    de forma 100% dinâmica a partir do banco de dados SQLite real:
+    - Faturas por cartão de crédito cadastrado
+    - Custos fixos / diretos (transações sem cartão vinculado)
+    - Totais mensais consolidados e status pago/pendente
+    - Desdobramento horizontal por responsável cadastrado (Rafael, Mãe, Irmã, Tia Renata, etc.)
+    - Desdobramento horizontal por categoria real
+    - Métrica de Runway / Sobrevivência baseada na queima média real
     """
-    # 1. Carregar transações do ano especificado
     start_dt = datetime(year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     end_dt = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
+    # 1. Carregar todas as transações que pertencem ao ano solicitado
+    # (por fatura invoice_month ou por dt_lcto)
     tx_stmt = select(Transaction).where(
-        Transaction.dt_lcto >= start_dt,
-        Transaction.dt_lcto < end_dt
+        or_(
+            Transaction.invoice_month.like(f"{year}-%"),
+            (
+                Transaction.invoice_month.is_(None)
+                & (Transaction.dt_lcto >= start_dt)
+                & (Transaction.dt_lcto < end_dt)
+            ),
+        )
     )
     tx_res = await db.execute(tx_stmt)
     transactions = tx_res.scalars().all()
 
-    # 2. Carregar entidades de apoio
-    owners_res = await db.execute(select(Owner))
-    owners_map = {o.id: o.name for o in owners_res.scalars().all()}
+    # 2. Carregar entidades mestras do banco
+    owners_res = await db.execute(select(Owner).order_by(Owner.id.asc()))
+    owners = owners_res.scalars().all()
+    owners_map = {o.id: o.name for o in owners}
 
-    cats_res = await db.execute(select(Category))
-    cats_map = {c.id: c.description for c in cats_res.scalars().all()}
+    cats_res = await db.execute(select(Category).order_by(Category.id.asc()))
+    cats = cats_res.scalars().all()
+    cats_map = {c.id: c.description for c in cats}
 
-    cards_res = await db.execute(select(Card))
-    cards_map = {c.id: c.card_name for c in cards_res.scalars().all()}
+    cards_res = await db.execute(select(Card).order_by(Card.id.asc()))
+    cards = cards_res.scalars().all()
+    cards_map = {c.id: c.card_name for c in cards}
 
-    # 3. Montar linhas de custos fixos
-    fixed_rows: List[FixedExpenseRow] = []
-    for item in SPREADSHEET_FIXED_DEFAULTS:
-        monthly_vals = {}
-        for m in range(1, 13):
-            m_key = f"{m:02d}"
-            monthly_vals[m_key] = round(item["values"].get(m_key, 0.0), 2)
-        total_yr = round(sum(monthly_vals.values()), 2)
-        fixed_rows.append(FixedExpenseRow(
-            name=item["name"],
-            category=item["category"],
-            responsible=item["responsible"],
-            monthly_values=monthly_vals,
-            total_year=total_yr
-        ))
-
-    # 4. Montar linhas de faturas de cartão
-    card_rows: List[FixedExpenseRow] = []
-    for c_item in SPREADSHEET_CARD_DEFAULTS:
-        monthly_vals = {}
-        for m in range(1, 13):
-            m_key = f"{m:02d}"
-            monthly_vals[m_key] = round(c_item["values"].get(m_key, 0.0), 2)
-        total_yr = round(sum(monthly_vals.values()), 2)
-        card_rows.append(FixedExpenseRow(
-            name=c_item["name"],
-            category=c_item["category"],
-            responsible=c_item["responsible"],
-            monthly_values=monthly_vals,
-            total_year=total_yr
-        ))
-
-    # 5. Distribuir transações dinâmicas do banco nos meses correspondentes
-    # db_monthly_sums[m_key] = { "total": float, "paid": float, "pending": float }
-    db_monthly_sums = {f"{m:02d}": {"total": 0.0, "paid": 0.0, "pending": 0.0} for m in range(1, 13)}
-    owners_matrix: Dict[str, Dict[str, float]] = {name: {f"{m:02d}": 0.0 for m in range(1, 13)} for name in owners_map.values()}
-    categories_matrix: Dict[str, Dict[str, float]] = {name: {f"{m:02d}": 0.0 for m in range(1, 13)} for name in cats_map.values()}
-
-    for tx in transactions:
+    def get_tx_month_key(tx: Transaction) -> Optional[str]:
         if tx.invoice_month and len(tx.invoice_month) >= 7 and tx.invoice_month.startswith(str(year)):
-            m_key = tx.invoice_month[5:7]
-        else:
-            m_key = f"{tx.dt_lcto.month:02d}"
-        val = round(tx.value, 2)
-        db_monthly_sums[m_key]["total"] += val
-        if tx.is_paid:
-            db_monthly_sums[m_key]["paid"] += val
-        else:
-            db_monthly_sums[m_key]["pending"] += val
+            m_str = tx.invoice_month[5:7]
+            if m_str.isdigit() and 1 <= int(m_str) <= 12:
+                return m_str
+        if tx.dt_lcto and tx.dt_lcto.year == year:
+            return f"{tx.dt_lcto.month:02d}"
+        return None
 
-        owner_name = owners_map.get(tx.owner_id, "Rafael")
-        if owner_name not in owners_matrix:
-            owners_matrix[owner_name] = {f"{m:02d}": 0.0 for m in range(1, 13)}
-        owners_matrix[owner_name][m_key] = round(owners_matrix[owner_name][m_key] + val, 2)
+    # 3. Montar linhas dinâmicas de cartões de crédito
+    card_rows: List[FixedExpenseRow] = []
+    for c in cards:
+        c_vals = {f"{m:02d}": 0.0 for m in range(1, 13)}
+        for tx in transactions:
+            if tx.card_id == c.id:
+                m_k = get_tx_month_key(tx)
+                if m_k:
+                    c_vals[m_k] = round(c_vals[m_k] + tx.value, 2)
+        tot_yr = round(sum(c_vals.values()), 2)
+        card_rows.append(
+            FixedExpenseRow(
+                name=c.card_name,
+                category="Cartão de Crédito",
+                responsible="Titular / Familiar",
+                monthly_values=c_vals,
+                total_year=tot_yr,
+            )
+        )
 
-        cat_name = cats_map.get(tx.type_id, "Outros")
-        if cat_name not in categories_matrix:
-            categories_matrix[cat_name] = {f"{m:02d}": 0.0 for m in range(1, 13)}
-        categories_matrix[cat_name][m_key] = round(categories_matrix[cat_name][m_key] + val, 2)
+    # 4. Montar linhas de custos fixos / diretos (transações onde card_id is None)
+    direct_txs = [tx for tx in transactions if tx.card_id is None]
+    direct_groups: Dict[str, Dict[str, float]] = {}
+    direct_meta: Dict[str, Dict[str, str]] = {}
 
-    # Adicionar também os custos fixos da planilha na matriz de proprietários (Rafael é o titular padrão)
-    if "Rafael" not in owners_matrix:
-        owners_matrix["Rafael"] = {f"{m:02d}": 0.0 for m in range(1, 13)}
+    for tx in direct_txs:
+        desc = tx.description.strip()
+        if desc not in direct_groups:
+            direct_groups[desc] = {f"{m:02d}": 0.0 for m in range(1, 13)}
+            direct_meta[desc] = {
+                "category": cats_map.get(tx.type_id, "Geral"),
+                "responsible": owners_map.get(tx.owner_id, "Rafael"),
+            }
+        m_k = get_tx_month_key(tx)
+        if m_k:
+            direct_groups[desc][m_k] = round(direct_groups[desc][m_k] + tx.value, 2)
 
-    for row in fixed_rows:
-        for m_key, val in row.monthly_values.items():
-            owners_matrix["Rafael"][m_key] = round(owners_matrix["Rafael"][m_key] + val, 2)
-            cname = row.category
-            if cname not in categories_matrix:
-                categories_matrix[cname] = {f"{m:02d}": 0.0 for m in range(1, 13)}
-            categories_matrix[cname][m_key] = round(categories_matrix[cname][m_key] + val, 2)
+    fixed_rows: List[FixedExpenseRow] = []
+    for desc, m_vals in direct_groups.items():
+        tot_yr = round(sum(m_vals.values()), 2)
+        fixed_rows.append(
+            FixedExpenseRow(
+                name=desc,
+                category=direct_meta[desc]["category"],
+                responsible=direct_meta[desc]["responsible"],
+                monthly_values=m_vals,
+                total_year=tot_yr,
+            )
+        )
 
-    # 6. Calcular somas totais por coluna (Mês)
+    # 5. Montar matriz de responsáveis (De Quem São as Contas)
+    owners_matrix: Dict[str, Dict[str, float]] = {
+        o.name: {f"{m:02d}": 0.0 for m in range(1, 13)} for o in owners
+    }
+    for tx in transactions:
+        o_name = owners_map.get(tx.owner_id, "Rafael")
+        if o_name not in owners_matrix:
+            owners_matrix[o_name] = {f"{m:02d}": 0.0 for m in range(1, 13)}
+        m_k = get_tx_month_key(tx)
+        if m_k:
+            owners_matrix[o_name][m_k] = round(owners_matrix[o_name][m_k] + tx.value, 2)
+
+    for o_name, m_dict in owners_matrix.items():
+        m_dict["total"] = round(sum(v for k, v in m_dict.items() if k != "total"), 2)
+
+    # 6. Montar matriz de categorias
+    categories_matrix: Dict[str, Dict[str, float]] = {
+        c.description: {f"{m:02d}": 0.0 for m in range(1, 13)} for c in cats
+    }
+    for tx in transactions:
+        c_name = cats_map.get(tx.type_id, "Outros")
+        if c_name not in categories_matrix:
+            categories_matrix[c_name] = {f"{m:02d}": 0.0 for m in range(1, 13)}
+        m_k = get_tx_month_key(tx)
+        if m_k:
+            categories_matrix[c_name][m_k] = round(categories_matrix[c_name][m_k] + tx.value, 2)
+
+    for c_name, m_dict in categories_matrix.items():
+        m_dict["total"] = round(sum(v for k, v in m_dict.items() if k != "total"), 2)
+
+    # 7. Totalizar as colunas mensais (Janeiro a Dezembro)
     monthly_columns: List[MonthlyColumnSummary] = []
     grand_total_year = 0.0
 
     for m in range(1, 13):
         m_key = f"{m:02d}"
-        fixed_sum = sum(r.monthly_values.get(m_key, 0.0) for r in fixed_rows)
-        cards_sum = sum(r.monthly_values.get(m_key, 0.0) for r in card_rows)
-        variable_sum = db_monthly_sums[m_key]["total"]
-        month_grand = round(fixed_sum + cards_sum + variable_sum, 2)
+        txs_month = [tx for tx in transactions if get_tx_month_key(tx) == m_key]
+        fixed_sum = round(sum(tx.value for tx in txs_month if tx.card_id is None), 2)
+        cards_sum = round(sum(tx.value for tx in txs_month if tx.card_id is not None), 2)
+        month_grand = round(fixed_sum + cards_sum, 2)
         grand_total_year += month_grand
 
-        # Paid / Pending estimation
-        paid_val = db_monthly_sums[m_key]["paid"]
-        pending_val = db_monthly_sums[m_key]["pending"] + fixed_sum + cards_sum
+        paid_val = round(sum(tx.value for tx in txs_month if tx.is_paid), 2)
+        pending_val = round(sum(tx.value for tx in txs_month if not tx.is_paid), 2)
 
-        monthly_columns.append(MonthlyColumnSummary(
-            month_key=m_key,
-            month_name=MONTH_NAMES[m - 1],
-            fixed_total=round(fixed_sum, 2),
-            cards_total=round(cards_sum, 2),
-            variable_total=round(variable_sum, 2),
-            grand_total=month_grand,
-            paid_total=round(paid_val, 2),
-            pending_total=round(pending_val, 2)
-        ))
+        monthly_columns.append(
+            MonthlyColumnSummary(
+                month_key=m_key,
+                month_name=MONTH_NAMES[m - 1],
+                fixed_total=fixed_sum,
+                cards_total=cards_sum,
+                variable_total=0.0,
+                grand_total=month_grand,
+                paid_total=paid_val,
+                pending_total=pending_val,
+            )
+        )
 
     grand_total_year = round(grand_total_year, 2)
 
-    # 7. Calcular métrica de Runway / Sobrevivência (Métrica de Ouro da Planilha)
-    # Custo fixo mensal médio representativo dos meses com operação ativa
+    # 8. Métrica de Sobrevivência (Runway)
     months_with_values = [col.grand_total for col in monthly_columns if col.grand_total > 0]
-    avg_burn = round(sum(months_with_values) / len(months_with_values), 2) if months_with_values else 3300.0
-
-    months_runway = round(account_balance / avg_burn, 1) if avg_burn > 0 else 0.0
-    if months_runway >= 6.0:
-        h_status = "Excelente"
-        h_comment = f"Reserva robusta! Você tem {months_runway} meses de cobertura para emergências."
-    elif months_runway >= 4.0:
-        h_status = "Adequado"
-        h_comment = f"Segurança satisfatória: {months_runway} meses de fôlego financeiro na pior das hipóteses."
-    elif months_runway >= 2.0:
-        h_status = "Atenção"
-        h_comment = f"Atenção necessária: {months_runway} meses de reserva. Recomendado reforçar o caixa."
+    if months_with_values:
+        avg_burn = round(sum(months_with_values) / len(months_with_values), 2)
+        months_runway = round(account_balance / avg_burn, 1) if avg_burn > 0 else 0.0
+        if months_runway >= 6.0:
+            h_status = "Excelente"
+            h_comment = f"Reserva robusta! Você tem {months_runway} meses de cobertura para emergências."
+        elif months_runway >= 4.0:
+            h_status = "Adequado"
+            h_comment = f"Segurança satisfatória: {months_runway} meses de fôlego financeiro na pior das hipóteses."
+        elif months_runway >= 2.0:
+            h_status = "Atenção"
+            h_comment = f"Atenção necessária: {months_runway} meses de reserva. Recomendado reforçar o caixa."
+        elif months_runway > 0:
+            h_status = "Crítico"
+            h_comment = f"Alerta vermelho: apenas {months_runway} meses de caixa. Priorizar cortes e entradas urgentes."
+        else:
+            h_status = "Neutro"
+            h_comment = "Insira o saldo em conta para calcular os meses de sobrevivência."
     else:
-        h_status = "Crítico"
-        h_comment = f"Alerta vermelho: apenas {months_runway} meses de caixa. Priorizar cortes e entradas urgentes."
+        avg_burn = 0.0
+        months_runway = 0.0
+        h_status = "Aguardando Lançamentos"
+        h_comment = "Nenhuma despesa lançada para o ano selecionado. Lance suas faturas para ativar a projeção de runway."
 
     runway_metric = RunwayMetric(
         account_balance=round(account_balance, 2),
         monthly_fixed_burn=avg_burn,
         months_of_runway=months_runway,
         health_status=h_status,
-        comment=h_comment
+        comment=h_comment,
     )
-
-    # Totais por linha na matriz de donos e categorias
-    for name, m_dict in owners_matrix.items():
-        m_dict["total"] = round(sum(v for k, v in m_dict.items() if k != "total"), 2)
-
-    for cname, m_dict in categories_matrix.items():
-        m_dict["total"] = round(sum(v for k, v in m_dict.items() if k != "total"), 2)
 
     return MacroProjectionResponse(
         year=year,
@@ -422,5 +364,5 @@ async def compute_macro_projection(
         card_expenses=card_rows,
         owners_matrix=owners_matrix,
         categories_matrix=categories_matrix,
-        grand_total_year=grand_total_year
+        grand_total_year=grand_total_year,
     )

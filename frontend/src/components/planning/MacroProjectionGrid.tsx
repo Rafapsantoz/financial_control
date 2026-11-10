@@ -32,8 +32,8 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
   initialYear = 2026,
 }) => {
   const [year, setYear] = useState<number>(initialYear)
-  const [accountBalance, setAccountBalance] = useState<number>(16638.4)
-  const [balanceInput, setBalanceInput] = useState<string>('16638.40')
+  const [accountBalance, setAccountBalance] = useState<number>(0.0)
+  const [balanceInput, setBalanceInput] = useState<string>('0.00')
   const [data, setData] = useState<MacroProjectionResponse | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,15 +67,19 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
 
   const handleCopySummary = () => {
     if (!data) return
+    const membersSummary = data.owners_matrix
+      ? Object.entries(data.owners_matrix)
+          .map(([name, vals]) => `• *${name}:* ${formatCurrency(vals['total'] || 0)}`)
+          .join('\n')
+      : '• Nenhum membro cadastrado'
+
     const text = `📊 *RPsec Financeiro — Resumo Anual ${data.year}*\n` +
       `💰 Saldo Atual: ${formatCurrency(data.account_balance)}\n` +
       `🛡️ Runway (Sobrevivência): ${data.runway.months_of_runway} Meses (${data.runway.health_status})\n` +
       `🔥 Queima Média Mensal: ${formatCurrency(data.runway.monthly_fixed_burn)}\n` +
       `📈 Total Projetado no Ano: ${formatCurrency(data.grand_total_year)}\n\n` +
-      `*Mãe (Rateio Acumulado):* R$ 3.645,83\n` +
-      `*Mãe (Mês Recorrente):* R$ 777,00 (Notebook 2/11, Moto 3/3, Droga Raia 3/3, Osawa)\n` +
-      `*Brenda (Despesas):* R$ 296,06\n` +
-      `*Custo Fixo Pessoal:* R$ 1.540,00/mês`
+      `*Gastos por Membro no Ano (${data.year}):*\n` +
+      membersSummary
 
     navigator.clipboard.writeText(text)
     setCopySuccess(true)
@@ -129,7 +133,9 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                 <span className="text-sm font-semibold text-indigo-200">meses</span>
               </div>
               <p className="text-[11px] text-indigo-200/70 mt-1">
-                "Tenho {data?.runway.months_of_runway || 5} Meses na pior das hipóteses"
+                {data && data.runway.monthly_fixed_burn > 0
+                  ? `Cobertura com queima de ${formatCurrency(data.runway.monthly_fixed_burn)}/mês`
+                  : 'Aguardando lançamentos para calcular'}
               </p>
             </div>
 
@@ -150,7 +156,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                   type="text"
                   value={balanceInput}
                   onChange={(e) => setBalanceInput(e.target.value)}
-                  placeholder="16638.40"
+                  placeholder="0.00"
                   className="w-full px-2.5 py-1 text-sm bg-black/30 border border-white/20 rounded-lg text-white font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400"
                 />
                 <button
@@ -177,42 +183,49 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                   <Users className="w-4 h-4" />
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Rateio & Dívidas da Família
+                  Rateio & Gastos por Membro
                 </h4>
               </div>
               <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                Planilha 2026
+                Acumulado {year}
               </span>
             </div>
 
-            <div className="space-y-3 text-xs">
-              {/* MÃE */}
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
-                <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100">
-                  <span>Mãe (Saldo Acumulado)</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">R$ 3.645,83</span>
+            <div className="space-y-2.5 text-xs">
+              {data && Object.keys(data.owners_matrix).length > 0 ? (
+                Object.entries(data.owners_matrix).map(([ownerName, mVals]) => {
+                  const total = mVals['total'] || 0
+                  return (
+                    <div
+                      key={ownerName}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                          <span>{ownerName}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          {total > 0 ? `Acumulado de ${year}` : 'Sem despesas lançadas'}
+                        </p>
+                      </div>
+                      <span className={`font-mono font-bold text-sm ${total > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {formatCurrency(total)}
+                      </span>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="p-3 text-center text-xs text-slate-400 italic">
+                  Nenhum membro cadastrado.
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  Parcelas ativas na fatura: Notebook 2/11 (R$ 250), Moto 3/3 (R$ 334), Droga Raia 3/3 (R$ 76,32), Osawa (R$ 116,68) = <b>R$ 777,00/mês</b>.
-                </p>
-              </div>
-
-              {/* BRENDA */}
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
-                <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100">
-                  <span>Brenda / Irmã</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">R$ 296,06</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  Despesas mapeadas: R$ 92,99 + R$ 143,07 + R$ 60,00.
-                </p>
-              </div>
+              )}
             </div>
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Quanto eu tenho: <b>R$ 7.562,53</b></span>
-            <span>Custo Fixo: <b>R$ 1.540,00</b></span>
+            <span>Total Ano: <b>{formatCurrency(data?.grand_total_year || 0)}</b></span>
+            <span>Saldo em Conta: <b>{formatCurrency(data?.account_balance || 0)}</b></span>
           </div>
         </div>
       </div>
@@ -229,7 +242,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Matriz da Planilha (Contas & Faturas)</span>
+            <span>Matriz Anual (Contas & Cartões)</span>
           </button>
 
           <button
@@ -291,7 +304,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
               <span>Planejamento Anual {year} — Macro Projeção Mês a Mês</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Visão horizontal consolidada de Janeiro a Dezembro idêntica à planilha de controle
+              Visão horizontal consolidada de Janeiro a Dezembro alimentada 100% pelos dados reais do banco
             </p>
           </div>
           <div className="text-right">
@@ -321,7 +334,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
             </thead>
 
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
-              {/* MODE 1: MATRIX (SPREADSHEET ACCOUNTS & CARDS) */}
+              {/* MODE 1: MATRIX (ACCOUNTS & CARDS) */}
               {activeMode === 'matrix' && (
                 <>
                   {/* SEÇÃO 1: CUSTOS FIXOS */}
@@ -331,24 +344,32 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                     </td>
                   </tr>
 
-                  {data?.fixed_expenses.map((row, idx) => (
-                    <tr key={`fixed-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
-                        {row.name}
-                      </td>
-                      {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
-                        const val = row.monthly_values[mKey] || 0
-                        return (
-                          <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
-                            {val > 0 ? formatCurrency(val) : '-'}
-                          </td>
-                        )
-                      })}
-                      <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
-                        {formatCurrency(row.total_year)}
+                  {data?.fixed_expenses && data.fixed_expenses.length > 0 ? (
+                    data.fixed_expenses.map((row, idx) => (
+                      <tr key={`fixed-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
+                          {row.name}
+                        </td>
+                        {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
+                          const val = row.monthly_values[mKey] || 0
+                          return (
+                            <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {val > 0 ? formatCurrency(val) : '-'}
+                            </td>
+                          )
+                        })}
+                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
+                          {formatCurrency(row.total_year)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={14} className="py-3 px-4 text-slate-400 dark:text-slate-500 italic font-sans text-center">
+                        Nenhum custo fixo recorrente lançado ainda. (Despesas diretas sem cartão vinculado aparecerão aqui).
                       </td>
                     </tr>
-                  ))}
+                  )}
 
                   {/* SEÇÃO 2: CARTÕES DE CRÉDITO */}
                   <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400">
@@ -357,25 +378,33 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                     </td>
                   </tr>
 
-                  {data?.card_expenses.map((cRow, idx) => (
-                    <tr key={`card-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs flex items-center gap-1.5">
-                        <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>{cRow.name}</span>
-                      </td>
-                      {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
-                        const val = cRow.monthly_values[mKey] || 0
-                        return (
-                          <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
-                            {val > 0 ? formatCurrency(val) : '-'}
-                          </td>
-                        )
-                      })}
-                      <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
-                        {formatCurrency(cRow.total_year)}
+                  {data?.card_expenses && data.card_expenses.length > 0 ? (
+                    data.card_expenses.map((cRow, idx) => (
+                      <tr key={`card-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>{cRow.name}</span>
+                        </td>
+                        {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
+                          const val = cRow.monthly_values[mKey] || 0
+                          return (
+                            <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {val > 0 ? formatCurrency(val) : '-'}
+                            </td>
+                          )
+                        })}
+                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
+                          {formatCurrency(cRow.total_year)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={14} className="py-3 px-4 text-slate-400 dark:text-slate-500 italic font-sans text-center">
+                        Nenhum cartão cadastrado.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </>
               )}
 

@@ -30,13 +30,13 @@ router = APIRouter()
 )
 async def get_macro_projection(
     year: int = Query(2026, ge=2020, le=2050, description="Ano de referência"),
-    account_balance: float = Query(16638.40, ge=0.0, description="Saldo disponível na conta bancária"),
+    account_balance: float = Query(0.0, ge=0.0, description="Saldo disponível na conta bancária"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Retorna a matriz completa de 12 meses da planilha do usuário:
-    - Custos fixos recorrentes (Casa, Impostos, Internet, Claro, Custo Fixo Pessoal)
-    - Faturas de cartões (PicPay, Mercado Pago, Nubank Empresa)
+    Retorna a matriz completa de 12 meses calculada dinamicamente:
+    - Custos fixos e despesas diretas
+    - Faturas por cartão de crédito cadastrado
     - Totalização consolidada por mês (Janeiro a Dezembro)
     - Métricas de sobrevivência (Runway / Meses de reserva)
     - Desdobramento cruzado por responsável e por categoria

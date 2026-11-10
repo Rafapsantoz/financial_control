@@ -56,6 +56,16 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
         role: 'Adicional / Dependente',
       }
     }
+    if (lower.includes('renata') || lower.includes('tia')) {
+      return {
+        color: 'from-amber-500 to-orange-600',
+        lightBg: 'bg-amber-50 border-amber-200 text-amber-700',
+        badgeBg: 'bg-amber-100 text-amber-800',
+        progressBar: 'bg-amber-500',
+        icon: User,
+        role: 'Adicional / Dependente',
+      }
+    }
     return {
       color: 'from-slate-600 to-gray-700',
       lightBg: 'bg-slate-50 border-slate-200 text-slate-700',
@@ -99,7 +109,7 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {ownersSummary.map((owner) => {
         const config = getOwnerConfig(owner.owner_name)
         const Icon = config.icon

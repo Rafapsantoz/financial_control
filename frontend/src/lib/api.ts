@@ -250,7 +250,7 @@ export async function confirmInvoiceBatch(
 
 export async function fetchMacroProjection(
   year: number = 2026,
-  accountBalance: number = 16638.40
+  accountBalance: number = 0.0
 ): Promise<MacroProjectionResponse> {
   const params = new URLSearchParams({
     year: String(year),
