@@ -53,6 +53,7 @@ pnpm-debug.log*
 
 # Banco de dados local (SQLite / arquivos locais)
 *.db
+*.db*
 *.db-shm
 *.db-wal
 *.sqlite
