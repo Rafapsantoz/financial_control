@@ -41,6 +41,9 @@ class ExtractedInvoiceResponse(BaseModel):
     due_date: Optional[str] = Field(default=None, description="Data de vencimento da fatura")
     total_invoice_amount: float = Field(default=0.0, description="Valor total consolidado da fatura")
     card_id: Optional[int] = Field(default=None, description="ID do cartão associado")
+    file_hash: Optional[str] = Field(default=None, description="Hash SHA-256 do arquivo PDF para controle de duplicidade")
+    is_already_imported: bool = Field(default=False, description="Indica se este mesmo arquivo ou ciclo de fatura já foi importado")
+    already_imported_message: Optional[str] = Field(default=None, description="Mensagem de alerta informando a importação anterior")
     items: List[ExtractedInvoiceItem] = Field(default_factory=list, description="Lista de todas as compras detalhadas na fatura")
 
 
@@ -124,6 +127,9 @@ class InvoiceConfirmRequest(BaseModel):
         default=False,
         description="Se True, gera previsões de parcelas futuras (is_forecast=True) para compras parceladas",
     )
+    file_hash: Optional[str] = Field(default=None, description="Hash SHA-256 do arquivo original para prevenção de duplicidade")
+    filename: Optional[str] = Field(default=None, description="Nome do arquivo PDF original enviado")
+    bank_or_issuer: Optional[str] = Field(default=None, description="Nome do emissor identificado")
     items: List[InvoiceConfirmItem] = Field(..., min_length=1, description="Lista de itens confirmados da fatura")
 
 
@@ -134,5 +140,20 @@ class InvoiceConfirmResponse(BaseModel):
         default_factory=list, description="Lista de transações persistidas no banco"
     )
     message: str = Field(default="Transações confirmadas com sucesso.", description="Mensagem de status")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceUploadResponse(BaseModel):
+    id: int
+    file_hash: str
+    filename: str
+    card_id: Optional[int] = None
+    target_month: str
+    bank_or_issuer: Optional[str] = None
+    total_amount: float
+    items_count: int
+    uploaded_at: datetime
+    status: str
 
     model_config = ConfigDict(from_attributes=True)

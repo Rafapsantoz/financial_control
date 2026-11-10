@@ -667,3 +667,62 @@ async def test_confirm_invoice_pydantic_schema_validations(client: AsyncClient):
     resp = await client.post("/api/v1/invoices/confirm", json=bad_val_payload)
     assert resp.status_code == 422
 
+
+@pytest.mark.asyncio
+async def test_duplicate_invoice_upload_detection_and_history(client: AsyncClient):
+    """Verifies that uploaded invoices are tracked with SHA-256 and duplicate uploads are detected."""
+    # 1. Mock Gemini extraction
+    mock_resp = MagicMock()
+    mock_resp.text = json.dumps(SAMPLE_STRUCTURED_RESPONSE)
+    mock_resp.parsed = None
+
+    with patch("app.core.gemini.get_gemini_client") as mock_get_client:
+        mock_client_inst = MagicMock()
+        mock_client_inst.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+        mock_get_client.return_value = mock_client_inst
+
+        # First upload
+        files = {"file": ("fatura_teste.pdf", SYNTHETIC_PDF_BYTES, "application/pdf")}
+        r1 = await client.post("/api/v1/invoices/extract", files=files)
+        assert r1.status_code == 200
+        data1 = r1.json()
+        assert data1["is_already_imported"] is False
+        assert data1["file_hash"] is not None
+        pdf_hash = data1["file_hash"]
+
+        # Confirm batch with file_hash
+        confirm_payload = {
+            "card_id": 1,
+            "target_month": "2026-11",
+            "file_hash": pdf_hash,
+            "filename": "fatura_teste.pdf",
+            "bank_or_issuer": "Nubank",
+            "items": [
+                {
+                    "description": "Compra Teste Anti-Duplicidade",
+                    "value": 150.0,
+                    "owner_id": 1,
+                    "type_id": 1,
+                    "cur_parcs": 1,
+                    "total_parcs": 1,
+                }
+            ],
+        }
+        r_confirm = await client.post("/api/v1/invoices/confirm", json=confirm_payload)
+        assert r_confirm.status_code == 201
+
+        # Second upload with the exact same file -> should detect duplicate
+        files2 = {"file": ("fatura_teste.pdf", SYNTHETIC_PDF_BYTES, "application/pdf")}
+        r2 = await client.post("/api/v1/invoices/extract", files=files2)
+        assert r2.status_code == 200
+        data2 = r2.json()
+        assert data2["is_already_imported"] is True
+        assert "já foi importado anteriormente" in data2["already_imported_message"]
+
+        # Check list of uploads
+        r_uploads = await client.get("/api/v1/invoices/uploads")
+        assert r_uploads.status_code == 200
+        uploads_list = r_uploads.json()
+        assert len(uploads_list) >= 1
+        assert any(u["file_hash"] == pdf_hash for u in uploads_list)
+

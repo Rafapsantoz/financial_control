@@ -133,6 +133,9 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
         card_id: extractedData?.card_id || selectedCardId,
         target_month: finalMonth,
         project_future_installments: false,
+        file_hash: extractedData?.file_hash || undefined,
+        filename: file?.name || undefined,
+        bank_or_issuer: extractedData?.bank_or_issuer || undefined,
         items: selectedToPersist.map((item) => ({
           purchase_date: item.purchase_date,
           description: item.description,
@@ -294,6 +297,22 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
           {/* STEP 2: Review & Confirm */}
           {extractedData && (
             <div className="space-y-4">
+              {/* Duplicate Invoice Warning Alert (RN02 Protection) */}
+              {extractedData.is_already_imported && (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-sm text-amber-900 dark:text-amber-100">
+                      ⚠️ Esta fatura já foi importada anteriormente!
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                      {extractedData.already_imported_message ||
+                        'O sistema identificou que este mesmo arquivo PDF já foi confirmado no banco de dados. Salvar novamente poderá duplicar as compras.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Extraction Summary Banner */}
               <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div>

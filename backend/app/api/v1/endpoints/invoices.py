@@ -1,13 +1,18 @@
-from typing import Optional
+import hashlib
+from datetime import datetime, timezone
+from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.card import Card
+from app.models.invoice_upload import InvoiceUpload
 from app.schemas.invoice import (
     ExtractedInvoiceResponse,
     InvoiceConfirmRequest,
     InvoiceConfirmResponse,
+    InvoiceUploadResponse,
 )
 from app.services.gemini_service import (
     confirm_invoice_transactions,
@@ -74,12 +79,35 @@ async def extract_invoice(
                 detail=f"Cartão com ID {effective_card_id} não existe no sistema.",
             )
 
-    # 5. Extract and enrich
+    # 5. Calculate SHA-256 hash to prevent duplicate file uploads
+    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    # 6. Extract and enrich via Gemini
     extracted_data = await extract_invoice_from_pdf(
         db=db,
         pdf_bytes=pdf_bytes,
         card_id=effective_card_id,
     )
+    extracted_data.file_hash = file_hash
+
+    # 7. Check if this exact file was previously imported and confirmed
+    existing_upload = (
+        await db.execute(
+            select(InvoiceUpload).where(
+                InvoiceUpload.file_hash == file_hash,
+                InvoiceUpload.status == "CONFIRMED",
+            )
+        )
+    ).scalars().first()
+
+    if existing_upload:
+        extracted_data.is_already_imported = True
+        formatted_dt = existing_upload.uploaded_at.strftime("%d/%m/%Y às %H:%M")
+        extracted_data.already_imported_message = (
+            f"Atenção: Este arquivo '{existing_upload.filename}' já foi importado anteriormente "
+            f"em {formatted_dt} (Mês: {existing_upload.target_month}, {existing_upload.items_count} compras, "
+            f"R$ {existing_upload.total_amount:.2f}). Para evitar cobranças repetidas, verifique se deseja reenviar."
+        )
 
     return extracted_data
 
@@ -97,6 +125,7 @@ async def confirm_invoice(
     """
     Persiste a lista de transações conferidas e aprovadas pelo usuário na tabela
     `transactions_fapp` com validação estrita de integridade referencial.
+    Registra a importação na tabela `invoice_uploads_fapp` para controle de duplicidades.
     """
     if not payload.items:
         raise HTTPException(
@@ -105,4 +134,42 @@ async def confirm_invoice(
         )
 
     result = await confirm_invoice_transactions(db=db, request=payload)
+
+    # Register invoice import record for audit and duplicate prevention
+    file_hash = payload.file_hash or hashlib.sha256(
+        f"{payload.target_month}_{payload.card_id}_{result.total_amount}".encode()
+    ).hexdigest()
+
+    upload_record = InvoiceUpload(
+        file_hash=file_hash,
+        filename=payload.filename or "fatura_importada.pdf",
+        card_id=payload.card_id,
+        target_month=payload.target_month or "2026-11",
+        bank_or_issuer=payload.bank_or_issuer,
+        total_amount=result.total_amount,
+        items_count=result.confirmed_count,
+        uploaded_at=datetime.now(timezone.utc),
+        status="CONFIRMED",
+    )
+    db.add(upload_record)
+    await db.commit()
+
     return result
+
+
+@router.get(
+    "/uploads",
+    response_model=List[InvoiceUploadResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Histórico de faturas importadas para auditoria e controle de duplicidades",
+)
+async def list_invoice_uploads(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retorna o histórico de todas as faturas em PDF já processadas e confirmadas no sistema.
+    """
+    res = await db.execute(
+        select(InvoiceUpload).order_by(InvoiceUpload.uploaded_at.desc())
+    )
+    return res.scalars().all()

@@ -90,6 +90,9 @@ export interface ExtractedInvoiceResponse {
   invoice_month_year?: string | null
   due_date?: string | null
   total_invoice_amount: number
+  file_hash?: string | null
+  is_already_imported?: boolean
+  already_imported_message?: string | null
   items: ExtractedInvoiceItem[]
 }
 
@@ -115,6 +118,9 @@ export interface InvoiceConfirmRequest {
   card_id?: number | null
   target_month?: string | null
   project_future_installments?: boolean
+  file_hash?: string | null
+  filename?: string | null
+  bank_or_issuer?: string | null
   items: InvoiceConfirmItem[]
 }
 
@@ -123,6 +129,19 @@ export interface InvoiceConfirmResponse {
   total_amount: number
   created_transactions: Transaction[]
   message: string
+}
+
+export interface InvoiceUpload {
+  id: number
+  file_hash: string
+  filename: string
+  card_id?: number | null
+  target_month: string
+  bank_or_issuer?: string | null
+  total_amount: number
+  items_count: number
+  uploaded_at: string
+  status: string
 }
 
 // --- PLANNING & SPREADSHEET PROJECTION TYPES ---

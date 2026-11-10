@@ -6,6 +6,7 @@ import {
   Goal,
   InvoiceConfirmRequest,
   InvoiceConfirmResponse,
+  InvoiceUpload,
   LivingScenario,
   MacroProjectionResponse,
   FinancialPrinciple,
@@ -243,6 +244,12 @@ export async function confirmInvoiceBatch(
     const err = await res.json().catch(() => ({ detail: 'Erro ao confirmar transações' }))
     throw new Error(err.detail || 'Falha ao confirmar transações')
   }
+  return res.json()
+}
+
+export async function fetchInvoiceUploads(): Promise<InvoiceUpload[]> {
+  const res = await fetch(`${BASE_URL}/invoices/uploads`)
+  if (!res.ok) throw new Error('Falha ao carregar histórico de faturas importadas')
   return res.json()
 }
 
