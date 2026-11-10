@@ -37,6 +37,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [curParcs, setCurParcs] = useState<number>(transaction.cur_parcs || 1)
   const [totalParcs, setTotalParcs] = useState<number>(transaction.total_parcs || 1)
   const [isPaid, setIsPaid] = useState<boolean>(transaction.is_paid || false)
+  const [isForecast, setIsForecast] = useState<boolean>(transaction.is_forecast || false)
   const [comment, setComment] = useState(transaction.comment || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -54,6 +55,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setCurParcs(transaction.cur_parcs || 1)
       setTotalParcs(transaction.total_parcs || 1)
       setIsPaid(transaction.is_paid || false)
+      setIsForecast(transaction.is_forecast || false)
       setComment(transaction.comment || '')
       setErrorMsg('')
     }
@@ -92,6 +94,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         cur_parcs: curParcs,
         total_parcs: totalParcs,
         is_paid: isPaid,
+        is_forecast: isForecast,
         comment: comment.trim() || undefined,
       })
       onClose()
@@ -319,6 +322,30 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               onChange={(e) => setComment(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100"
               placeholder="Ex: Compra parcelada dividida com a mãe"
+            />
+          </div>
+
+          {/* Is Forecast / Previsão Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <label htmlFor="edit-is-forecast" className="text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer">
+                  Gasto Previsto / Estimativa
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Desmarque quando o valor real da fatura chegar para torná-lo efetivo.
+                </p>
+              </div>
+            </div>
+            <input
+              id="edit-is-forecast"
+              type="checkbox"
+              checked={isForecast}
+              onChange={(e) => setIsForecast(e.target.checked)}
+              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700 cursor-pointer"
             />
           </div>
 

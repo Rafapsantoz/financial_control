@@ -1,15 +1,31 @@
 import logging
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from app.core.database import AsyncSessionLocal, Base, engine
 from app.models import Card, Category, Goal, Owner
 
 logger = logging.getLogger("financial_organizer.init_db")
 
-INITIAL_OWNERS = []
+INITIAL_OWNERS = [
+    {"name": "Rafael", "category": "Familiar", "phone_number": None},
+    {"name": "Mãe", "category": "Familiar", "phone_number": None},
+    {"name": "Irmã", "category": "Familiar", "phone_number": None},
+]
 
-INITIAL_CATEGORIES = []
+INITIAL_CATEGORIES = [
+    {"description": "Mercado"},
+    {"description": "Lazer"},
+    {"description": "Farmácia"},
+    {"description": "Restaurante"},
+    {"description": "Roupas"},
+    {"description": "Assinaturas"},
+    {"description": "Transporte"},
+    {"description": "Outros"},
+    {"description": "Gastos Previstos"},
+]
 
-INITIAL_CARDS = []
+INITIAL_CARDS = [
+    {"card_name": "Nubank", "total_limit": 5000.0, "payment_date": None, "due_day": 10},
+]
 
 INITIAL_GOALS = []
 
@@ -18,6 +34,7 @@ async def init_db() -> None:
     """
     Initializes database tables and seeds standard records idempotently.
     Enforces SQLite foreign keys, WAL mode, and automatic schema migrations.
+    Only seeds baseline master records if the corresponding tables are empty.
     """
     # 1. Create tables if they do not exist
     async with engine.begin() as conn:
@@ -46,38 +63,27 @@ async def init_db() -> None:
             except Exception as e:
                 logger.warning(f"Error checking/migrating transactions_fapp table: {e}")
 
-    # 2. Seed initial data idempotently
+    # 2. Seed initial data idempotently (only if tables are empty)
     async with AsyncSessionLocal() as session:
         # Seed Owners
-        for owner_data in INITIAL_OWNERS:
-            stmt = select(Owner).where(Owner.name == owner_data["name"])
-            existing = await session.scalar(stmt)
-            if not existing:
+        owner_count = await session.scalar(select(func.count(Owner.id)))
+        if owner_count == 0:
+            for owner_data in INITIAL_OWNERS:
                 session.add(Owner(**owner_data))
                 logger.info(f"Seeded owner: {owner_data['name']}")
 
         # Seed Categories
-        for cat_data in INITIAL_CATEGORIES:
-            stmt = select(Category).where(Category.description == cat_data["description"])
-            existing = await session.scalar(stmt)
-            if not existing:
+        cat_count = await session.scalar(select(func.count(Category.id)))
+        if cat_count == 0:
+            for cat_data in INITIAL_CATEGORIES:
                 session.add(Category(**cat_data))
                 logger.info(f"Seeded category: {cat_data['description']}")
 
         # Seed Cards
-        for card_data in INITIAL_CARDS:
-            stmt = select(Card).where(Card.card_name == card_data["card_name"])
-            existing = await session.scalar(stmt)
-            if not existing:
+        card_count = await session.scalar(select(func.count(Card.id)))
+        if card_count == 0:
+            for card_data in INITIAL_CARDS:
                 session.add(Card(**card_data))
                 logger.info(f"Seeded card: {card_data['card_name']}")
-
-        # Seed Goals
-        for goal_data in INITIAL_GOALS:
-            stmt = select(Goal).where(Goal.title == goal_data["title"])
-            existing = await session.scalar(stmt)
-            if not existing:
-                session.add(Goal(**goal_data))
-                logger.info(f"Seeded goal: {goal_data['title']}")
 
         await session.commit()

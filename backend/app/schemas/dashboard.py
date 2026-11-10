@@ -6,6 +6,8 @@ class OwnerSummary(BaseModel):
     owner_id: int = Field(..., description="ID do responsável cadastrado")
     owner_name: str = Field(..., description="Nome do responsável (ex: Rafael, Mãe, Irmã)")
     total_amount: float = Field(..., description="Total de gastos atribuídos no mês em R$")
+    effective_amount: float = Field(default=0.0, description="Total de gastos efetivos confirmados em R$")
+    forecast_amount: float = Field(default=0.0, description="Total de gastos previstos/estimados em R$")
     paid_amount: float = Field(..., description="Total já quitado no mês em R$")
     pending_amount: float = Field(..., description="Total ainda pendente de quitação no mês em R$")
     status: str = Field(
@@ -29,7 +31,10 @@ class CategorySummary(BaseModel):
 class DashboardSummaryResponse(BaseModel):
     month: str = Field(..., description="Mês de referência no formato YYYY-MM")
     card_id: Optional[int] = Field(default=None, description="ID do cartão filtrado, se aplicável")
-    total_amount: float = Field(..., description="Valor total consolidado da fatura no mês em R$")
+    total_amount: float = Field(..., description="Valor total líquido/fechamento da fatura no mês em R$")
+    total_effective: float = Field(default=0.0, description="Valor total líquido / efetivo (apenas compras confirmadas) em R$")
+    total_forecast: float = Field(default=0.0, description="Valor total previsto / estimado em R$")
+    total_consolidated: float = Field(default=0.0, description="Valor total consolidado (Efetivo + Previsto) em R$")
     total_paid: float = Field(..., description="Valor total já quitado da fatura em R$")
     total_pending: float = Field(..., description="Valor total pendente de quitação da fatura em R$")
     owners_summary: List[OwnerSummary] = Field(

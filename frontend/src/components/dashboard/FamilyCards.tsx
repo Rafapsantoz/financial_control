@@ -178,6 +178,14 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Forecast indicator if member has estimated expenses */}
+              {owner.forecast_amount && owner.forecast_amount > 0 ? (
+                <div className="mt-2.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-md border border-amber-200/60 dark:border-amber-900/60 flex items-center justify-between font-medium">
+                  <span>Efetivo: {formatCurrency(owner.effective_amount || 0)}</span>
+                  <span className="font-bold">Previsto: {formatCurrency(owner.forecast_amount)}</span>
+                </div>
+              ) : null}
             </div>
 
             {/* EXPANDABLE DETAILS DRAWER (Visible when clicked / selected) */}

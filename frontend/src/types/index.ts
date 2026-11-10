@@ -43,6 +43,8 @@ export interface OwnerSummary {
   owner_id: number
   owner_name: string
   total_amount: number
+  effective_amount?: number
+  forecast_amount?: number
   paid_amount: number
   pending_amount: number
   status: 'Pago' | 'Pendente' | 'Parcial' | 'Sem despesas'
@@ -60,6 +62,9 @@ export interface DashboardSummaryResponse {
   month: string
   card_id?: number | null
   total_amount: number
+  total_effective?: number
+  total_forecast?: number
+  total_consolidated?: number
   total_paid: number
   total_pending: number
   owners_summary: OwnerSummary[]

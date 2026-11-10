@@ -2,6 +2,7 @@ import React from 'react'
 import {
   AlertTriangle,
   CheckCircle,
+  Clock,
   CreditCard,
   PieChart,
   ShoppingBag,
@@ -12,6 +13,9 @@ import { formatCurrency } from '../../lib/formatters'
 
 interface InvoiceOverviewProps {
   totalAmount: number
+  totalEffective?: number
+  totalForecast?: number
+  totalConsolidated?: number
   totalPaid: number
   totalPending: number
   categoriesSummary: CategorySummary[]
@@ -20,12 +24,19 @@ interface InvoiceOverviewProps {
 
 export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
   totalAmount,
+  totalEffective,
+  totalForecast,
+  totalConsolidated,
   totalPaid,
   totalPending,
   categoriesSummary,
   cardName = 'Nubank Principal',
 }) => {
-  const percentPaid = totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0
+  const effective = totalEffective ?? totalAmount
+  const forecast = totalForecast ?? 0
+  const consolidated = totalConsolidated ?? (effective + forecast)
+  const baseForPercent = consolidated > 0 ? consolidated : effective
+  const percentPaid = baseForPercent > 0 ? Math.round((totalPaid / baseForPercent) * 100) : 0
 
   const getCategoryColor = (name: string, index: number) => {
     const palette = [
@@ -49,14 +60,14 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
         <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
 
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="p-2 rounded-xl bg-white/10 backdrop-blur-md">
                 <CreditCard className="w-5 h-5 text-emerald-400" />
               </span>
               <div>
                 <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-                  Fechamento Consolidado
+                  Fechamento Consolidado & Estimativas
                 </p>
                 <h4 className="text-sm font-medium text-slate-200">{cardName}</h4>
               </div>
@@ -68,11 +79,52 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
             </div>
           </div>
 
-          <div className="my-3">
-            <p className="text-xs text-slate-400 font-medium">Valor Total da Fatura</p>
-            <p className="text-4xl font-extrabold tracking-tight text-white mt-0.5">
-              {formatCurrency(totalAmount)}
-            </p>
+          {/* DUAL TOTALS: CONSOLIDATED vs LIQUID (EFFECTIVE) & FORECAST */}
+          <div className="my-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* TOTAL CONSOLIDADO */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] uppercase tracking-wider text-indigo-300 font-bold">
+                  Total Consolidado
+                </span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Líquido + Previsto
+                </span>
+              </div>
+              <div className="text-3xl font-black tracking-tight text-white mt-0.5">
+                {formatCurrency(consolidated)}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Saída total esperada da conta no mês
+              </p>
+            </div>
+
+            {/* TOTAL LÍQUIDO & PREVISTO */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 flex flex-col justify-between">
+              <div className="flex items-baseline justify-between gap-2">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold block">
+                    Total Líquido (Efetivo)
+                  </span>
+                  <span className="text-xl font-extrabold text-white">
+                    {formatCurrency(effective)}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold block">
+                    Previsto / Estimado
+                  </span>
+                  <span className="text-base font-bold text-amber-300">
+                    {formatCurrency(forecast)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {forecast > 0
+                  ? `${formatCurrency(effective)} confirmados + ${formatCurrency(forecast)} estimados`
+                  : 'Nenhum gasto previsto pendente neste mês'}
+              </p>
+            </div>
           </div>
         </div>
 

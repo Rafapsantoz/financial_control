@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { PlusCircle, X } from 'lucide-react'
+import { PlusCircle, X, Clock } from 'lucide-react'
 import { Card, Category, Owner, Transaction } from '../../types'
 
 interface AddTransactionModalProps {
@@ -37,9 +37,18 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1)
   const [curParcs, setCurParcs] = useState<number>(1)
   const [totalParcs, setTotalParcs] = useState<number>(1)
+  const [isForecast, setIsForecast] = useState<boolean>(false)
   const [comment, setComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  const handleCategoryChange = (catId: number) => {
+    setCategoryId(catId)
+    const cat = categories.find((c) => c.id === catId)
+    if (cat && cat.description.toLowerCase().includes('previst')) {
+      setIsForecast(true)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,6 +78,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         cur_parcs: curParcs,
         total_parcs: totalParcs,
         is_paid: false,
+        is_forecast: isForecast,
         comment: comment.trim() || undefined,
       })
       onClose()
@@ -199,7 +209,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria *</label>
               <select
                 value={categoryId}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
+                onChange={(e) => handleCategoryChange(Number(e.target.value))}
                 className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               >
                 {categories.map((cat) => (
@@ -246,6 +256,30 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
+            />
+          </div>
+
+          {/* Is Forecast / Previsão Toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <label htmlFor="add-is-forecast" className="text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer">
+                  Gasto Previsto / Estimativa
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Marque para valores estimados (luz, água, internet, DAS MEI) que podem variar.
+                </p>
+              </div>
+            </div>
+            <input
+              id="add-is-forecast"
+              type="checkbox"
+              checked={isForecast}
+              onChange={(e) => setIsForecast(e.target.checked)}
+              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700 cursor-pointer"
             />
           </div>
 

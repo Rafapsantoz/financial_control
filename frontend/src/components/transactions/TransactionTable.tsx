@@ -56,6 +56,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
+  const [forecastFilter, setForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
 
   const ownersMap = new Map(owners.map((o) => [o.id, o]))
   const cardsMap = new Map(cards.map((c) => [c.id, c]))
@@ -70,6 +71,10 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     // Status filter
     if (statusFilter === 'pending' && tx.is_paid) return false
     if (statusFilter === 'paid' && !tx.is_paid) return false
+
+    // Forecast filter
+    if (forecastFilter === 'effective' && tx.is_forecast) return false
+    if (forecastFilter === 'forecast' && !tx.is_forecast) return false
 
     // Search filter
     if (searchTerm.trim()) {
@@ -214,6 +219,40 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
               Pagos
             </button>
           </div>
+
+          {/* Forecast Filter */}
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+            <button
+              onClick={() => setForecastFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                forecastFilter === 'all'
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setForecastFilter('effective')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                forecastFilter === 'effective'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+              }`}
+            >
+              Efetivos
+            </button>
+            <button
+              onClick={() => setForecastFilter('forecast')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                forecastFilter === 'forecast'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+              }`}
+            >
+              Previstos
+            </button>
+          </div>
         </div>
       </div>
 
@@ -278,7 +317,18 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
 
                     {/* Description */}
                     <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                      <div>{tx.description}</div>
+                      <div className="flex items-center gap-2">
+                        <span>{tx.description}</span>
+                        {tx.is_forecast && (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                            title="Gasto previsto / estimado (pode ser ajustado quando a conta fechar)"
+                          >
+                            <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                            Previsto
+                          </span>
+                        )}
+                      </div>
                       {tx.comment && (
                         <div className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">{tx.comment}</div>
                       )}

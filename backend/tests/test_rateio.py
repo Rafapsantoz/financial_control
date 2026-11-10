@@ -580,3 +580,55 @@ async def test_dashboard_reflects_transaction_update_and_deletion(client: AsyncC
     assert dash3["total_amount"] == 0.00
     assert dash3["total_pending"] == 0.00
 
+
+@pytest.mark.asyncio
+async def test_forecast_and_consolidated_liquid_separation(client: AsyncClient):
+    """
+    Tests the separation between Total Consolidado (with forecasts) and Total Líquido (effective only):
+    - Confirmed purchase: R$ 200.00 (is_forecast=False)
+    - Estimated bill (luz/água/imposto): R$ 150.00 (is_forecast=True)
+    - Expected:
+      total_effective == 200.00 (Total Líquido)
+      total_forecast == 150.00 (Total Previsto)
+      total_consolidated == 350.00 (Total Consolidado)
+    - When confirmed with real bill: is_forecast toggled to False -> total_effective becomes 350.00
+    """
+    month = "2026-11"
+
+    # 1. Post effective transaction
+    await client.post("/api/v1/transactions", json={
+        "dt_lcto": f"{month}-05T12:00:00Z",
+        "description": "Supermercado Semanal",
+        "value": 200.00,
+        "is_forecast": False,
+    })
+
+    # 2. Post forecasted estimated bill
+    f_res = await client.post("/api/v1/transactions", json={
+        "dt_lcto": f"{month}-10T12:00:00Z",
+        "description": "Conta de Luz (Previsto)",
+        "value": 150.00,
+        "is_forecast": True,
+    })
+    forecast_id = f_res.json()["id"]
+
+    # 3. Verify separation in dashboard summary
+    dash = (await client.get(f"/api/v1/dashboard/summary?month={month}")).json()
+    assert dash["total_effective"] == 200.00
+    assert dash["total_forecast"] == 150.00
+    assert dash["total_consolidated"] == 350.00
+    assert dash["total_amount"] == 200.00
+
+    # 4. Update the bill when actual invoice arrives (e.g., luz veio R$ 160.00) and uncheck is_forecast
+    await client.put(f"/api/v1/transactions/{forecast_id}", json={
+        "value": 160.00,
+        "is_forecast": False,
+        "description": "Conta de Luz (Fechada)",
+    })
+
+    dash2 = (await client.get(f"/api/v1/dashboard/summary?month={month}")).json()
+    assert dash2["total_effective"] == 360.00
+    assert dash2["total_forecast"] == 0.00
+    assert dash2["total_consolidated"] == 360.00
+    assert dash2["total_amount"] == 360.00
+

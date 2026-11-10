@@ -207,6 +207,9 @@ export function App() {
             <section>
               <InvoiceOverview
                 totalAmount={summary?.total_amount || 0}
+                totalEffective={summary?.total_effective || 0}
+                totalForecast={summary?.total_forecast || 0}
+                totalConsolidated={summary?.total_consolidated || 0}
                 totalPaid={summary?.total_paid || 0}
                 totalPending={summary?.total_pending || 0}
                 categoriesSummary={summary?.category_summary || []}
