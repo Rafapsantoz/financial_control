@@ -169,6 +169,19 @@ export function App() {
     await loadMonthData()
   }
 
+  // Determine active card names in the current view for dynamic title
+  const activeCardIds = Array.from(new Set(transactions.map((t) => t.card_id).filter(Boolean)))
+  const activeCardNames = activeCardIds
+    .map((cid) => cards.find((c) => c.id === cid)?.card_name)
+    .filter(Boolean) as string[]
+
+  const displayedCardName =
+    activeCardNames.length === 1
+      ? activeCardNames[0]
+      : activeCardNames.length > 1
+      ? `Consolidado (${activeCardNames.join(', ')})`
+      : cards[0]?.card_name || 'Cartão de Crédito'
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Top Navigation */}
@@ -247,7 +260,7 @@ export function App() {
                 totalPaid={summary?.total_paid || 0}
                 totalPending={summary?.total_pending || 0}
                 categoriesSummary={summary?.category_summary || []}
-                cardName={cards[0]?.card_name || 'Nubank Principal'}
+                cardName={displayedCardName}
               />
             </section>
 

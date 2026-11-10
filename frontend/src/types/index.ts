@@ -121,6 +121,7 @@ export interface InvoiceConfirmRequest {
   file_hash?: string | null
   filename?: string | null
   bank_or_issuer?: string | null
+  replace_existing?: boolean
   items: InvoiceConfirmItem[]
 }
 

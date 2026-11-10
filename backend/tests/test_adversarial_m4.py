@@ -95,15 +95,23 @@ async def test_adversarial_m4_double_invoice_confirmation_behavior(client: Async
     assert sum1.status_code == 200
     assert sum1.json()["total_amount"] == 320.00
 
-    # Second direct confirmation (blind double-post): creates 2 more transactions
+    # Second direct confirmation (blind double-post): blocked by duplicate prevention
     res2 = await client.post("/api/v1/invoices/confirm", json=confirm_payload)
-    assert res2.status_code == 201
-    assert res2.json()["confirmed_count"] == 2
+    assert res2.status_code == 409
+    assert "já foi importada anteriormente" in res2.json()["detail"]
 
-    # Total in DB now doubled to 640.00
+    # When replace_existing=True is provided, it replaces previous entries cleanly
+    res2_replace = await client.post(
+        "/api/v1/invoices/confirm",
+        json={**confirm_payload, "replace_existing": True},
+    )
+    assert res2_replace.status_code == 201
+    assert res2_replace.json()["confirmed_count"] == 2
+
+    # Total in DB remains 320.00 (never duplicated to 640.00)
     sum2 = await client.get("/api/v1/dashboard/summary?month=2026-10")
     assert sum2.status_code == 200
-    assert sum2.json()["total_amount"] == 640.00
+    assert sum2.json()["total_amount"] == 320.00
 
     # Verify RN02 defense on re-extract:
     mock_payload = {

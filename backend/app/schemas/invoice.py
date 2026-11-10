@@ -130,6 +130,10 @@ class InvoiceConfirmRequest(BaseModel):
     file_hash: Optional[str] = Field(default=None, description="Hash SHA-256 do arquivo original para prevenção de duplicidade")
     filename: Optional[str] = Field(default=None, description="Nome do arquivo PDF original enviado")
     bank_or_issuer: Optional[str] = Field(default=None, description="Nome do emissor identificado")
+    replace_existing: bool = Field(
+        default=False,
+        description="Se True e a fatura já tiver sido importada, remove as transações anteriores da fatura antes de persistir as novas.",
+    )
     items: List[InvoiceConfirmItem] = Field(..., min_length=1, description="Lista de itens confirmados da fatura")
 
 

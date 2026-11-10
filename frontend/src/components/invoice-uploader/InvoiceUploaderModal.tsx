@@ -42,6 +42,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
   const [targetMonth, setTargetMonth] = useState<string>(currentMonth)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
+  const [replaceExisting, setReplaceExisting] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedInvoiceResponse | null>(null)
   const [editedItems, setEditedItems] = useState<
     (ExtractedInvoiceItem & { selected: boolean; targetOwnerId: number; targetCategoryId: number })[]
@@ -57,6 +58,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
         return
       }
       setFile(selected)
+      setReplaceExisting(false)
       setErrorMsg('')
     }
   }
@@ -70,6 +72,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
     try {
       setIsExtracting(true)
       setErrorMsg('')
+      setReplaceExisting(false)
       const result = await extractInvoiceFromPDF(file, selectedCardId)
       setExtractedData(result)
       if (result.invoice_month_year && /^\d{4}-(0[1-9]|1[0-2])$/.test(result.invoice_month_year)) {
@@ -136,6 +139,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
         file_hash: extractedData?.file_hash || undefined,
         filename: file?.name || undefined,
         bank_or_issuer: extractedData?.bank_or_issuer || undefined,
+        replace_existing: replaceExisting,
         items: selectedToPersist.map((item) => ({
           purchase_date: item.purchase_date,
           description: item.description,
@@ -299,16 +303,34 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
             <div className="space-y-4">
               {/* Duplicate Invoice Warning Alert (RN02 Protection) */}
               {extractedData.is_already_imported && (
-                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-bold text-sm text-amber-900 dark:text-amber-100">
-                      ⚠️ Esta fatura já foi importada anteriormente!
-                    </p>
-                    <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                      {extractedData.already_imported_message ||
-                        'O sistema identificou que este mesmo arquivo PDF já foi confirmado no banco de dados. Salvar novamente poderá duplicar as compras.'}
-                    </p>
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs shadow-xs animate-in fade-in duration-200 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-bold text-sm text-amber-900 dark:text-amber-100">
+                        ⚠️ Esta fatura já foi importada anteriormente!
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                        {extractedData.already_imported_message ||
+                          'O sistema identificou que este mesmo arquivo PDF já foi confirmado no banco de dados. Para evitar compras duplicadas, a importação direta está bloqueada.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5 bg-amber-100/60 dark:bg-amber-900/30 p-2.5 rounded-lg">
+                    <input
+                      id="replaceExistingCheckbox"
+                      type="checkbox"
+                      checked={replaceExisting}
+                      onChange={(e) => setReplaceExisting(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <label htmlFor="replaceExistingCheckbox" className="text-xs text-amber-950 dark:text-amber-100 font-semibold cursor-pointer">
+                      Substituir lançamentos anteriores desta fatura
+                      <span className="block text-[11px] font-normal text-amber-800 dark:text-amber-300 mt-0.5">
+                        Ao marcar esta opção, o sistema atualizará as compras deste cartão no mês sem gerar cobranças repetidas.
+                      </span>
+                    </label>
                   </div>
                 </div>
               )}
@@ -350,6 +372,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   onClick={() => {
                     setExtractedData(null)
                     setEditedItems([])
+                    setReplaceExisting(false)
                   }}
                   className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 underline font-medium"
                 >
@@ -554,18 +577,34 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={isConfirming || editedItems.filter((i) => i.selected).length === 0}
-                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs shadow-emerald-600/30 transition-all disabled:opacity-50"
+                    disabled={
+                      isConfirming ||
+                      editedItems.filter((i) => i.selected).length === 0 ||
+                      Boolean(extractedData?.is_already_imported && !replaceExisting)
+                    }
+                    className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      extractedData?.is_already_imported && !replaceExisting
+                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30'
+                        : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
+                    }`}
                   >
                     {isConfirming ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         <span>Salvando no Banco...</span>
                       </>
+                    ) : extractedData?.is_already_imported && !replaceExisting ? (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Fatura Já Importada (Habilite Substituir)</span>
+                      </>
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Confirmar e Salvar em {formatMonthName(targetMonth || currentMonth)}</span>
+                        <span>
+                          {replaceExisting ? 'Substituir e Atualizar em ' : 'Confirmar e Salvar em '}
+                          {formatMonthName(targetMonth || currentMonth)}
+                        </span>
                       </>
                     )}
                   </button>

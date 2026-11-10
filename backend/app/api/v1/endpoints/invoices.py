@@ -133,25 +133,67 @@ async def confirm_invoice(
             detail="Nenhuma transação informada para confirmação.",
         )
 
-    result = await confirm_invoice_transactions(db=db, request=payload)
-
-    # Register invoice import record for audit and duplicate prevention
+    # Calculate or resolve file hash and effective month
+    eff_month = payload.target_month or (
+        payload.items[0].purchase_date[:7] if payload.items and payload.items[0].purchase_date else "2026-11"
+    )
+    total_batch_val = round(sum(float(i.value or i.amount or 0.0) for i in payload.items), 2)
     file_hash = payload.file_hash or hashlib.sha256(
-        f"{payload.target_month}_{payload.card_id}_{result.total_amount}".encode()
+        f"{eff_month}_{payload.card_id}_{total_batch_val}".encode()
     ).hexdigest()
 
-    upload_record = InvoiceUpload(
-        file_hash=file_hash,
-        filename=payload.filename or "fatura_importada.pdf",
-        card_id=payload.card_id,
-        target_month=payload.target_month or "2026-11",
-        bank_or_issuer=payload.bank_or_issuer,
-        total_amount=result.total_amount,
-        items_count=result.confirmed_count,
-        uploaded_at=datetime.now(timezone.utc),
-        status="CONFIRMED",
-    )
-    db.add(upload_record)
+    # Check for existing upload record with this file hash
+    existing_upload = (
+        await db.execute(
+            select(InvoiceUpload).where(
+                InvoiceUpload.file_hash == file_hash,
+                InvoiceUpload.status == "CONFIRMED",
+            )
+        )
+    ).scalars().first()
+
+    if existing_upload and not payload.replace_existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Esta fatura ({existing_upload.filename}) já foi importada anteriormente para o mês "
+                f"{existing_upload.target_month}. Para substituir os lançamentos anteriores sem duplicar, "
+                f"habilite a opção 'Substituir importação anterior'."
+            ),
+        )
+
+    # If replace_existing is requested and previous upload exists, wipe previous transactions for this month and card
+    if existing_upload and payload.replace_existing:
+        from sqlalchemy import delete
+        from app.models.transaction import Transaction
+
+        del_stmt = delete(Transaction).where(Transaction.invoice_month == eff_month)
+        if payload.card_id:
+            del_stmt = del_stmt.where(Transaction.card_id == payload.card_id)
+        await db.execute(del_stmt)
+        await db.commit()
+
+    result = await confirm_invoice_transactions(db=db, request=payload)
+
+    # Register or update invoice import record
+    if existing_upload:
+        existing_upload.total_amount = result.total_amount
+        existing_upload.items_count = result.confirmed_count
+        existing_upload.uploaded_at = datetime.now(timezone.utc)
+    else:
+        upload_record = InvoiceUpload(
+            file_hash=file_hash,
+            filename=payload.filename or "fatura_importada.pdf",
+            card_id=payload.card_id,
+            target_month=payload.target_month or "2026-11",
+            bank_or_issuer=payload.bank_or_issuer,
+            total_amount=result.total_amount,
+            items_count=result.confirmed_count,
+            uploaded_at=datetime.now(timezone.utc),
+            status="CONFIRMED",
+        )
+        db.add(upload_record)
+
     await db.commit()
 
     return result
