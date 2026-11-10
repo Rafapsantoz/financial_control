@@ -114,6 +114,13 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         </span>
       )
     }
+    if (lower.includes('renata') || lower.includes('tia')) {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          {name}
+        </span>
+      )
+    }
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
         {name}

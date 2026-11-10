@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react'
 import { Header } from './components/layout/Header'
 import { FamilyCards } from './components/dashboard/FamilyCards'
 import { InvoiceOverview } from './components/dashboard/InvoiceOverview'
@@ -9,6 +10,7 @@ import { InvoiceUploaderModal } from './components/invoice-uploader/InvoiceUploa
 import { AdminPanel } from './components/admin/AdminPanel'
 import { MacroProjectionGrid } from './components/planning/MacroProjectionGrid'
 import { BudgetAnalysisTab } from './components/planning/BudgetAnalysisTab'
+import { formatCurrency, formatDate, formatMonthName } from './lib/formatters'
 import {
   createTransaction,
   deleteTransaction,
@@ -59,6 +61,9 @@ export function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  const [successBanner, setSuccessBanner] = useState<string | null>(null)
+  const [txToDelete, setTxToDelete] = useState<Transaction | null>(null)
+  const [isDeletingTx, setIsDeletingTx] = useState(false)
 
   // Master records reload function (shared with Admin Panel)
   const loadMasters = async () => {
@@ -78,13 +83,13 @@ export function App() {
   }, [])
 
   // Load monthly summary & transactions
-  const loadMonthData = async () => {
+  const loadMonthData = async (monthToLoad: string = currentMonth) => {
     try {
       setIsLoading(true)
       setErrorBanner(null)
       const [sumData, txData] = await Promise.all([
-        fetchSummary(currentMonth),
-        fetchTransactions(currentMonth),
+        fetchSummary(monthToLoad),
+        fetchTransactions(monthToLoad),
       ])
       setSummary(sumData)
       setTransactions(txData)
@@ -97,15 +102,25 @@ export function App() {
   }
 
   useEffect(() => {
-    loadMonthData()
+    loadMonthData(currentMonth)
   }, [currentMonth])
+
+  // Handle invoice upload confirmation & auto-navigate to confirmed month
+  const handleInvoiceUploadSuccess = (confirmedMonth?: string) => {
+    const target = confirmedMonth || currentMonth
+    setSelectedOwnerId(null)
+    setCurrentMonth(target)
+    loadMonthData(target)
+    setSuccessBanner(`Fatura de ${formatMonthName(target)} sincronizada e carregada com sucesso!`)
+    setTimeout(() => setSuccessBanner(null), 5000)
+  }
 
   // Toggle transaction paid status
   const handleTogglePaid = async (id: number) => {
     try {
       setIsUpdatingId(id)
       await togglePaid(id)
-      await loadMonthData()
+      await loadMonthData(currentMonth)
     } catch (err: any) {
       alert(`Erro ao atualizar pagamento: ${err.message}`)
     } finally {
@@ -113,27 +128,39 @@ export function App() {
     }
   }
 
-  // Delete transaction
-  const handleDeleteTransaction = async (id: number) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta transação?')) return
+  // Request transaction deletion (opens sleek modal)
+  const handleDeleteTransaction = (id: number) => {
+    const found = transactions.find((t) => t.id === id)
+    if (found) {
+      setTxToDelete(found)
+    }
+  }
+
+  // Confirm delete transaction
+  const handleConfirmDeleteTransaction = async () => {
+    if (!txToDelete) return
     try {
-      await deleteTransaction(id)
-      await loadMonthData()
+      setIsDeletingTx(true)
+      await deleteTransaction(txToDelete.id)
+      setTxToDelete(null)
+      await loadMonthData(currentMonth)
     } catch (err: any) {
       alert(`Erro ao excluir transação: ${err.message}`)
+    } finally {
+      setIsDeletingTx(false)
     }
   }
 
   // Add manual transaction
   const handleAddTransaction = async (data: Partial<Transaction>) => {
     await createTransaction(data)
-    await loadMonthData()
+    await loadMonthData(currentMonth)
   }
 
   // Edit/update transaction
   const handleSaveEditedTransaction = async (id: number, data: Partial<Transaction>) => {
     await updateTransaction(id, data)
-    await loadMonthData()
+    await loadMonthData(currentMonth)
   }
 
   // Combined refresh when admin actions occur
@@ -164,11 +191,18 @@ export function App() {
           <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-sm flex items-center justify-between shadow-xs">
             <span>{errorBanner}</span>
             <button
-              onClick={loadMonthData}
+              onClick={() => loadMonthData(currentMonth)}
               className="px-3 py-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 rounded-lg text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-900 cursor-pointer"
             >
               Tentar novamente
             </button>
+          </div>
+        )}
+
+        {successBanner && (
+          <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-sm flex items-center gap-2.5 shadow-xs animate-in fade-in duration-200">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="font-semibold">{successBanner}</span>
           </div>
         )}
 
@@ -294,12 +328,90 @@ export function App() {
       <InvoiceUploaderModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onSuccess={loadMonthData}
+        onSuccess={handleInvoiceUploadSuccess}
         owners={owners}
         cards={cards}
         categories={categories}
         currentMonth={currentMonth}
       />
+
+      {/* Modal Customizado de Exclusão de Transação */}
+      {txToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 pb-4 flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  Excluir Transação da Fatura?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Esta ação removerá este lançamento do rateio familiar e recalculará os totais.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTxToDelete(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Details Preview */}
+            <div className="px-6 py-3">
+              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                    {txToDelete.description}
+                  </h4>
+                  <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 shrink-0">
+                    {formatCurrency(txToDelete.value)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <span>Data: <b className="text-slate-700 dark:text-slate-300">{formatDate(txToDelete.dt_lcto)}</b></span>
+                  <span>Parcela: <b className="text-slate-700 dark:text-slate-300">{txToDelete.cur_parcs}/{txToDelete.total_parcs}</b></span>
+                </div>
+                {txToDelete.comment && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate">
+                    "{txToDelete.comment}"
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-3 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                O valor será subtraído da fatura deste mês.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setTxToDelete(null)}
+                disabled={isDeletingTx}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTransaction}
+                disabled={isDeletingTx}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-xl shadow-xs shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isDeletingTx ? 'Excluindo...' : 'Sim, Excluir Transação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -14,12 +14,12 @@ import {
 } from 'lucide-react'
 import { Card, Category, ExtractedInvoiceItem, ExtractedInvoiceResponse, Owner } from '../../types'
 import { confirmInvoiceBatch, extractInvoiceFromPDF } from '../../lib/api'
-import { formatCurrency } from '../../lib/formatters'
+import { formatCurrency, formatMonthName } from '../../lib/formatters'
 
 interface InvoiceUploaderModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (confirmedMonth?: string) => void
   owners: Owner[]
   cards: Card[]
   categories: Category[]
@@ -128,9 +128,10 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
       setIsConfirming(true)
       setErrorMsg('')
 
+      const finalMonth = targetMonth || currentMonth
       const payload = {
         card_id: extractedData?.card_id || selectedCardId,
-        target_month: targetMonth || currentMonth,
+        target_month: finalMonth,
         project_future_installments: false,
         items: selectedToPersist.map((item) => ({
           purchase_date: item.purchase_date,
@@ -146,11 +147,14 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
       }
 
       const res = await confirmInvoiceBatch(payload)
-      setSuccessMsg(res.message || `${res.confirmed_count} transações confirmadas com sucesso!`)
+      setSuccessMsg(
+        res.message ||
+          `${res.confirmed_count} transações confirmadas com sucesso para a fatura de ${formatMonthName(finalMonth)}! Redirecionando...`
+      )
       setTimeout(() => {
-        onSuccess()
+        onSuccess(finalMonth)
         onClose()
-      }, 1500)
+      }, 1200)
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao persistir transações.')
     } finally {
@@ -299,14 +303,17 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-slate-400 dark:text-slate-500">Mês da Fatura:</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-medium">Mês da Fatura:</span>
                   <input
                     type="month"
                     value={targetMonth}
                     onChange={(e) => setTargetMonth(e.target.value)}
-                    className="px-2 py-0.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="px-2.5 py-1 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-xs font-bold text-emerald-800 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     title="Mês/Ano em que as compras serão contabilizadas no rateio"
                   />
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
+                    ({formatMonthName(targetMonth || currentMonth)})
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-400 dark:text-slate-500">Total Fatura:</span>
@@ -329,6 +336,47 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                 >
                   Enviar outro arquivo
                 </button>
+              </div>
+
+              {/* Quick Helper: Bulk Owner Assignment Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60 p-3 rounded-xl text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-emerald-950 dark:text-emerald-200 block">
+                      Atribuir compras da fatura em massa
+                    </span>
+                    <span className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
+                      Ideal quando a fatura inteira pertencer a uma única pessoa (ex: Tia Renata)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-emerald-900 dark:text-emerald-300 font-semibold text-[11px]">
+                    Definir todas para:
+                  </label>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (!e.target.value) return
+                      const newOwnerId = Number(e.target.value)
+                      setEditedItems((prev) =>
+                        prev.map((it) => ({ ...it, targetOwnerId: newOwnerId }))
+                      )
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="">Manter responsáveis individuais...</option>
+                    {owners.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Items Table */}
@@ -498,7 +546,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Confirmar e Salvar no SQLite</span>
+                        <span>Confirmar e Salvar em {formatMonthName(targetMonth || currentMonth)}</span>
                       </>
                     )}
                   </button>
