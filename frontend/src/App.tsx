@@ -25,9 +25,15 @@ import {
 import { Card, Category, DashboardSummaryResponse, Owner, Transaction } from './types'
 
 export function App() {
-  const [currentMonth, setCurrentMonth] = useState('2026-11')
+  const [currentMonth, setCurrentMonth] = useState<string>(() => {
+    return localStorage.getItem('fo_current_month') || '2026-11'
+  })
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null)
   const [currentView, setCurrentView] = useState<'dashboard' | 'macro' | 'budget' | 'admin'>('dashboard')
+
+  useEffect(() => {
+    localStorage.setItem('fo_current_month', currentMonth)
+  }, [currentMonth])
 
   // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
