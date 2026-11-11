@@ -23,18 +23,21 @@ export const SettlePaymentModal: React.FC<SettlePaymentModalProps> = ({
 }) => {
   if (!isOpen || !ownerSummary) return null
 
-  // Filter pending transactions for this owner in this month
+  // Filter pending transactions for this owner in this month (EXCLUDING forecasts: RN-Previsto)
   const pendingTxs = transactions
     .filter(
       (t) =>
         t.owner_id === ownerSummary.owner_id &&
         !t.is_paid &&
+        !t.is_forecast &&
         (t.invoice_month === month || (!t.invoice_month && t.dt_lcto?.startsWith(month)))
     )
     .sort((a, b) => a.value - b.value)
 
+  const totalEffectivePending = Math.round(pendingTxs.reduce((acc, t) => acc + t.value, 0) * 100) / 100
+
   const [paymentInput, setPaymentInput] = useState<string>(
-    String(ownerSummary.pending_amount || 0)
+    String(totalEffectivePending || 0)
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -79,7 +82,7 @@ export const SettlePaymentModal: React.FC<SettlePaymentModalProps> = ({
   const partialCount = cascadePreview.filter((p) => p.action === 'partial').length
   const simulatedRemaining = Math.max(
     0,
-    Math.round((ownerSummary.pending_amount - paymentVal) * 100) / 100
+    Math.round((totalEffectivePending - paymentVal) * 100) / 100
   )
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,9 +156,9 @@ export const SettlePaymentModal: React.FC<SettlePaymentModalProps> = ({
           {/* Pending Debt Summary Banner */}
           <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
             <div>
-              <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Total Pendente Atual</span>
+              <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Total Pendente Efetivo</span>
               <span className="text-base font-extrabold text-rose-600 dark:text-rose-400">
-                {formatCurrency(ownerSummary.pending_amount)}
+                {formatCurrency(totalEffectivePending)}
               </span>
             </div>
             <div>
@@ -164,6 +167,10 @@ export const SettlePaymentModal: React.FC<SettlePaymentModalProps> = ({
                 {formatCurrency(simulatedRemaining)}
               </span>
             </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-[11px] leading-relaxed">
+            💡 <strong>Gastos previstos/estimados são ignorados:</strong> Eles não entram na quitação automática para forçar o ajuste quando a fatura real chegar.
           </div>
 
           {/* Payment Amount Input */}
@@ -191,16 +198,16 @@ export const SettlePaymentModal: React.FC<SettlePaymentModalProps> = ({
             <div className="flex items-center gap-2 mt-2">
               <button
                 type="button"
-                onClick={() => setPaymentInput(String(ownerSummary.pending_amount))}
+                onClick={() => setPaymentInput(String(totalEffectivePending))}
                 className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-colors"
               >
-                Quitar Tudo ({formatCurrency(ownerSummary.pending_amount)})
+                Quitar Tudo ({formatCurrency(totalEffectivePending)})
               </button>
-              {ownerSummary.pending_amount > 10 && (
+              {totalEffectivePending > 10 && (
                 <button
                   type="button"
                   onClick={() =>
-                    setPaymentInput(String(Math.round((ownerSummary.pending_amount / 2) * 100) / 100))
+                    setPaymentInput(String(Math.round((totalEffectivePending / 2) * 100) / 100))
                   }
                   className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
                 >

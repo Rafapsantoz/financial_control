@@ -126,13 +126,14 @@ async def settle_owner_debt(
             detail=f"Proprietário com ID {id} não encontrado.",
         )
 
-    # Fetch pending transactions for this owner in the target month
+    # Fetch pending transactions for this owner in the target month (EXCLUDING forecasts: RN-Previsto)
     query = (
         select(Transaction)
         .where(
             Transaction.owner_id == id,
             Transaction.invoice_month == payload.month,
             Transaction.is_paid == False,
+            Transaction.is_forecast == False,
         )
         .order_by(Transaction.value.asc(), Transaction.dt_lcto.asc(), Transaction.id.asc())
     )
@@ -141,7 +142,7 @@ async def settle_owner_debt(
     if not pending_txs:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Não há compras pendentes de pagamento para {owner.name} no mês {payload.month}.",
+            detail=f"Não há despesas efetivas pendentes de pagamento para {owner.name} no mês {payload.month} (gastos previstos/estimados não entram em quitação).",
         )
 
     remaining = round(payload.payment_amount, 2)
@@ -189,11 +190,12 @@ async def settle_owner_debt(
 
     await db.commit()
 
-    # Calculate remaining debt for this owner after settlement
+    # Calculate remaining debt for this owner after settlement (effective debts only)
     rem_sum_query = select(func.coalesce(func.sum(Transaction.value), 0.0)).where(
         Transaction.owner_id == id,
         Transaction.invoice_month == payload.month,
         Transaction.is_paid == False,
+        Transaction.is_forecast == False,
     )
     total_remaining_pending = round(float(await db.scalar(rem_sum_query) or 0.0), 2)
 

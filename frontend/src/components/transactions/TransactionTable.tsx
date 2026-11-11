@@ -377,30 +377,42 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                       {formatCurrency(tx.value)}
                     </td>
 
-                    {/* Status Button (Toggle Paid) */}
+                    {/* Status Button (Toggle Paid or Define Real for Forecasts) */}
                     <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => onTogglePaid(tx.id)}
-                        disabled={isToggling}
-                        title="Clique para alternar status de pagamento"
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all shadow-xs cursor-pointer ${
-                          tx.is_paid
-                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800'
-                            : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900 border border-rose-300 dark:border-rose-800'
-                        } disabled:opacity-50 active:scale-95`}
-                      >
-                        {tx.is_paid ? (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            <span>Pago</span>
-                          </>
-                        ) : (
-                          <>
-                            <Clock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                            <span>Pendente</span>
-                          </>
-                        )}
-                      </button>
+                      {tx.is_forecast && !tx.is_paid ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditTransaction(tx)}
+                          title="Gasto previsto: clique para lançar o valor real da fatura e torná-lo efetivo"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all shadow-xs bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 cursor-pointer"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Definir Real</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => onTogglePaid(tx.id)}
+                          disabled={isToggling}
+                          title="Clique para alternar status de pagamento"
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                            tx.is_paid
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800'
+                              : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900 border border-rose-300 dark:border-rose-800'
+                          } disabled:opacity-50 active:scale-95`}
+                        >
+                          {tx.is_paid ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span>Pago</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                              <span>Pendente</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </td>
 
                     {/* Actions: Edit & Delete */}
