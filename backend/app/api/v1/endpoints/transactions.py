@@ -269,6 +269,7 @@ async def split_transaction(
             )
 
     result_txs: List[Transaction] = []
+    base_comment = tx.comment or ""
 
     # 1. Update the original transaction with the first split part
     first_split = payload.splits[0]
@@ -278,7 +279,7 @@ async def split_transaction(
         tx.is_paid = first_split.is_paid
     owner_first = await db.get(Owner, first_split.owner_id)
     first_note = first_split.comment or f"Rateio 1/{len(payload.splits)} ({owner_first.name if owner_first else ''})"
-    tx.comment = f"{tx.comment} [{first_note}]".strip() if tx.comment else first_note
+    tx.comment = f"{base_comment} [{first_note}]".strip() if base_comment else f"[{first_note}]"
     result_txs.append(tx)
 
     # 2. Create sibling transactions for each subsequent split part
@@ -294,7 +295,7 @@ async def split_transaction(
             type_id=tx.type_id,
             total_parcs=tx.total_parcs,
             cur_parcs=tx.cur_parcs,
-            comment=f"{tx.comment or ''} [{s_note}]".strip() if tx.comment else s_note,
+            comment=f"{base_comment} [{s_note}]".strip() if base_comment else f"[{s_note}]",
             invoice_month=tx.invoice_month,
             is_paid=s.is_paid if s.is_paid is not None else False,
             is_forecast=tx.is_forecast,

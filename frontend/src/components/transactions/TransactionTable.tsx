@@ -10,6 +10,7 @@ import {
   X,
   CreditCard,
   User,
+  Users,
 } from 'lucide-react'
 import { Card, Category, Owner, Transaction } from '../../types'
 import { formatCurrency, formatDate } from '../../lib/formatters'
@@ -333,6 +334,15 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                           >
                             <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                             Previsto
+                          </span>
+                        )}
+                        {tx.comment && tx.comment.includes('Rateio') && (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                            title="Despesa dividida entre mais de uma pessoa"
+                          >
+                            <Users className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                            Rateado
                           </span>
                         )}
                       </div>
