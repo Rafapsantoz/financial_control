@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react'
 import { Header } from './components/layout/Header'
 import { FamilyCards } from './components/dashboard/FamilyCards'
+import { SettlePaymentModal } from './components/dashboard/SettlePaymentModal'
 import { InvoiceOverview } from './components/dashboard/InvoiceOverview'
 import { TransactionTable } from './components/transactions/TransactionTable'
 import { AddTransactionModal } from './components/transactions/AddTransactionModal'
@@ -22,7 +23,7 @@ import {
   togglePaid,
   updateTransaction,
 } from './lib/api'
-import { Card, Category, DashboardSummaryResponse, Owner, Transaction } from './types'
+import { Card, Category, DashboardSummaryResponse, Owner, OwnerSummary, Transaction } from './types'
 
 export function App() {
   const [currentMonth, setCurrentMonth] = useState<string>(() => {
@@ -65,6 +66,7 @@ export function App() {
   const [isUpdatingId, setIsUpdatingId] = useState<number | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [settlingOwner, setSettlingOwner] = useState<OwnerSummary | null>(null)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [successBanner, setSuccessBanner] = useState<string | null>(null)
@@ -253,6 +255,7 @@ export function App() {
                 ownersSummary={summary?.owners_summary || []}
                 selectedOwnerId={selectedOwnerId}
                 onSelectOwner={setSelectedOwnerId}
+                onOpenSettleModal={(o) => setSettlingOwner(o)}
               />
             </section>
 
@@ -339,9 +342,23 @@ export function App() {
         transaction={editingTransaction}
         onClose={() => setEditingTransaction(null)}
         onSave={handleSaveEditedTransaction}
+        onSuccessRefresh={() => loadMonthData(currentMonth)}
         owners={owners}
         cards={cards}
         categories={categories}
+      />
+
+      <SettlePaymentModal
+        isOpen={!!settlingOwner}
+        ownerSummary={settlingOwner}
+        month={currentMonth}
+        transactions={transactions}
+        onClose={() => setSettlingOwner(null)}
+        onSuccess={() => {
+          loadMonthData(currentMonth)
+          setSuccessBanner('Quitação processada com sucesso!')
+          setTimeout(() => setSuccessBanner(null), 4000)
+        }}
       />
 
       <InvoiceUploaderModal

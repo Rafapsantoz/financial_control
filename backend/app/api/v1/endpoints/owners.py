@@ -6,7 +6,13 @@ from sqlalchemy import select, func
 from app.core.database import get_db
 from app.models.owner import Owner
 from app.models.transaction import Transaction
-from app.schemas.owner import OwnerCreate, OwnerUpdate, OwnerResponse
+from app.schemas.owner import (
+    OwnerCreate,
+    OwnerUpdate,
+    OwnerResponse,
+    OwnerSettleRequest,
+    OwnerSettleResponse,
+)
 
 router = APIRouter()
 
@@ -99,3 +105,109 @@ async def delete_owner(id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(owner)
     await db.commit()
     return {"detail": f"Proprietário {id} excluído com sucesso."}
+
+
+@router.post("/{id}/settle", response_model=OwnerSettleResponse, status_code=status.HTTP_200_OK)
+async def settle_owner_debt(
+    id: int,
+    payload: OwnerSettleRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Settle debts in cascade for a specific owner in a given month.
+    Allocates payment_amount across pending transactions. Smaller/older debts are
+    cleared first. If a payment only partially covers a transaction, it splits
+    it into a fully paid portion and a remaining pending portion.
+    """
+    owner = await db.get(Owner, id)
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proprietário com ID {id} não encontrado.",
+        )
+
+    # Fetch pending transactions for this owner in the target month
+    query = (
+        select(Transaction)
+        .where(
+            Transaction.owner_id == id,
+            Transaction.invoice_month == payload.month,
+            Transaction.is_paid == False,
+        )
+        .order_by(Transaction.value.asc(), Transaction.dt_lcto.asc(), Transaction.id.asc())
+    )
+    pending_txs = (await db.execute(query)).scalars().all()
+
+    if not pending_txs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Não há compras pendentes de pagamento para {owner.name} no mês {payload.month}.",
+        )
+
+    remaining = round(payload.payment_amount, 2)
+    fully_settled = 0
+    partially_settled = 0
+
+    for tx in pending_txs:
+        if remaining <= 0:
+            break
+
+        tx_val = round(tx.value, 2)
+        if remaining >= tx_val:
+            tx.is_paid = True
+            remaining = round(remaining - tx_val, 2)
+            fully_settled += 1
+        else:
+            # Partial abatement: split tx into paid portion and remaining debt
+            paid_portion = remaining
+            unpaid_remainder = round(tx_val - paid_portion, 2)
+
+            # Update current transaction to paid portion
+            tx.value = paid_portion
+            tx.is_paid = True
+            tx.comment = f"{tx.comment or ''} [Quitado R$ {paid_portion:.2f} do total de R$ {tx_val:.2f}]".strip()
+
+            # Create remaining debt as a new pending transaction
+            rem_tx = Transaction(
+                dt_lcto=tx.dt_lcto,
+                description=tx.description,
+                value=unpaid_remainder,
+                owner_id=tx.owner_id,
+                card_id=tx.card_id,
+                type_id=tx.type_id,
+                total_parcs=tx.total_parcs,
+                cur_parcs=tx.cur_parcs,
+                comment=f"{tx.comment or ''} [Saldo restante de R$ {unpaid_remainder:.2f} pós quitação parcial de #{tx.id}]".strip(),
+                invoice_month=tx.invoice_month,
+                is_paid=False,
+                is_forecast=tx.is_forecast,
+            )
+            db.add(rem_tx)
+            partially_settled += 1
+            remaining = 0.0
+            break
+
+    await db.commit()
+
+    # Calculate remaining debt for this owner after settlement
+    rem_sum_query = select(func.coalesce(func.sum(Transaction.value), 0.0)).where(
+        Transaction.owner_id == id,
+        Transaction.invoice_month == payload.month,
+        Transaction.is_paid == False,
+    )
+    total_remaining_pending = round(float(await db.scalar(rem_sum_query) or 0.0), 2)
+
+    msg = (
+        f"Quitação de R$ {payload.payment_amount:.2f} processada com sucesso para {owner.name}! "
+        f"{fully_settled} título(s) quitado(s) integralmente"
+        + (f" e {partially_settled} título com abatimento parcial." if partially_settled else ".")
+    )
+
+    return OwnerSettleResponse(
+        owner_id=id,
+        settled_amount=round(payload.payment_amount - remaining, 2),
+        fully_settled_count=fully_settled,
+        partially_settled_count=partially_settled,
+        remaining_pending=total_remaining_pending,
+        message=msg,
+    )

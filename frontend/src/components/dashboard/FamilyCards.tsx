@@ -17,12 +17,14 @@ interface FamilyCardsProps {
   ownersSummary: OwnerSummary[]
   selectedOwnerId: number | null
   onSelectOwner: (ownerId: number | null) => void
+  onOpenSettleModal?: (owner: OwnerSummary) => void
 }
 
 export const FamilyCards: React.FC<FamilyCardsProps> = ({
   ownersSummary,
   selectedOwnerId,
   onSelectOwner,
+  onOpenSettleModal,
 }) => {
   const getOwnerConfig = (name: string) => {
     const lower = name.toLowerCase()
@@ -220,6 +222,21 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* Batch Settle Action Button */}
+                {owner.pending_amount > 0 && onOpenSettleModal && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenSettleModal(owner)
+                    }}
+                    className="w-full py-1.5 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-xs shadow-emerald-600/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>⚡ Quitar / Abater Valor em Lote</span>
+                  </button>
+                )}
 
                 {/* Filter indicator & action */}
                 <div className="pt-1 flex items-center justify-between text-[11px]">

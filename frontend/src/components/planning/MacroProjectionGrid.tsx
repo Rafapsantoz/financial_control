@@ -316,18 +316,18 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
+          <table className="w-full text-left text-xs whitespace-nowrap table-fixed">
             <thead>
               <tr className="bg-slate-100/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
-                <th className="py-3 px-4 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 shadow-xs min-w-[200px]">
+                <th className="py-3 px-4 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px]">
                   {activeMode === 'matrix' ? 'Descrição da Conta / Cartão' : activeMode === 'owners' ? 'Membro / Dono da Conta' : 'Categoria'}
                 </th>
                 {data?.months.map((m) => (
-                  <th key={m.month_key} className="py-3 px-3 text-right min-w-[95px]">
+                  <th key={m.month_key} className="py-3 px-3 text-right w-[95px] min-w-[95px] max-w-[95px]">
                     {m.month_name.slice(0, 3)}
                   </th>
                 ))}
-                <th className="py-3 px-4 text-right bg-slate-200/50 dark:bg-slate-700/50 min-w-[110px] font-extrabold text-slate-900 dark:text-slate-100">
+                <th className="py-3 px-4 text-right bg-slate-200/50 dark:bg-slate-700/50 w-[110px] min-w-[110px] max-w-[110px] font-extrabold text-slate-900 dark:text-slate-100">
                   Total Ano
                 </th>
               </tr>
@@ -347,18 +347,18 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                   {data?.fixed_expenses && data.fixed_expenses.length > 0 ? (
                     data.fixed_expenses.map((row, idx) => (
                       <tr key={`fixed-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
+                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px] truncate">
                           {row.name}
                         </td>
                         {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
                           const val = row.monthly_values[mKey] || 0
                           return (
-                            <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                            <td key={mKey} className={`py-2.5 px-3 text-right w-[95px] min-w-[95px] max-w-[95px] ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
                               {val > 0 ? formatCurrency(val) : '-'}
                             </td>
                           )
                         })}
-                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
+                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40 w-[110px] min-w-[110px] max-w-[110px]">
                           {formatCurrency(row.total_year)}
                         </td>
                       </tr>
@@ -381,19 +381,21 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                   {data?.card_expenses && data.card_expenses.length > 0 ? (
                     data.card_expenses.map((cRow, idx) => (
                       <tr key={`card-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>{cRow.name}</span>
+                        <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px]">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <CreditCard className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <span className="truncate">{cRow.name}</span>
+                          </div>
                         </td>
                         {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
                           const val = cRow.monthly_values[mKey] || 0
                           return (
-                            <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                            <td key={mKey} className={`py-2.5 px-3 text-right w-[95px] min-w-[95px] max-w-[95px] ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
                               {val > 0 ? formatCurrency(val) : '-'}
                             </td>
                           )
                         })}
-                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
+                        <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40 w-[110px] min-w-[110px] max-w-[110px]">
                           {formatCurrency(cRow.total_year)}
                         </td>
                       </tr>
@@ -412,21 +414,23 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
               {activeMode === 'owners' && data?.owners_matrix && (
                 Object.entries(data.owners_matrix).map(([ownerName, mVals]) => (
                   <tr key={ownerName} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="py-2.5 px-4 font-sans font-bold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
-                        {ownerName[0]}
+                    <td className="py-2.5 px-4 font-sans font-bold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px]">
+                      <div className="flex items-center gap-2 truncate">
+                        <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                          {ownerName[0]}
+                        </div>
+                        <span className="truncate">{ownerName}</span>
                       </div>
-                      <span>{ownerName}</span>
                     </td>
                     {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
                       const val = mVals[mKey] || 0
                       return (
-                        <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-800 dark:text-slate-200 font-semibold' : 'text-slate-300 dark:text-slate-600'}`}>
+                        <td key={mKey} className={`py-2.5 px-3 text-right w-[95px] min-w-[95px] max-w-[95px] ${val > 0 ? 'text-slate-800 dark:text-slate-200 font-semibold' : 'text-slate-300 dark:text-slate-600'}`}>
                           {val > 0 ? formatCurrency(val) : '-'}
                         </td>
                       )
                     })}
-                    <td className="py-2.5 px-4 text-right font-extrabold text-indigo-600 dark:text-indigo-400 bg-slate-50/80 dark:bg-slate-800/40">
+                    <td className="py-2.5 px-4 text-right font-extrabold text-indigo-600 dark:text-indigo-400 bg-slate-50/80 dark:bg-slate-800/40 w-[110px] min-w-[110px] max-w-[110px]">
                       {formatCurrency(mVals['total'] || 0)}
                     </td>
                   </tr>
@@ -437,18 +441,18 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
               {activeMode === 'categories' && data?.categories_matrix && (
                 Object.entries(data.categories_matrix).map(([catName, mVals]) => (
                   <tr key={catName} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
+                    <td className="py-2.5 px-4 font-sans font-semibold text-slate-900 dark:text-slate-100 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px] truncate">
                       {catName}
                     </td>
                     {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((mKey) => {
                       const val = mVals[mKey] || 0
                       return (
-                        <td key={mKey} className={`py-2.5 px-3 text-right ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                        <td key={mKey} className={`py-2.5 px-3 text-right w-[95px] min-w-[95px] max-w-[95px] ${val > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
                           {val > 0 ? formatCurrency(val) : '-'}
                         </td>
                       )
                     })}
-                    <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40">
+                    <td className="py-2.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100 bg-slate-50/80 dark:bg-slate-800/40 w-[110px] min-w-[110px] max-w-[110px]">
                       {formatCurrency(mVals['total'] || 0)}
                     </td>
                   </tr>
@@ -457,15 +461,15 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
 
               {/* LINHA DE TOTAIS POR MÊS */}
               <tr className="bg-slate-100 dark:bg-slate-800/80 font-bold border-t-2 border-slate-300 dark:border-slate-700">
-                <td className="py-3 px-4 font-sans font-black text-slate-900 dark:text-slate-100 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 shadow-xs">
+                <td className="py-3 px-4 font-sans font-black text-slate-900 dark:text-slate-100 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px]">
                   TOTAL MENSAL
                 </td>
                 {data?.months.map((m) => (
-                  <td key={m.month_key} className="py-3 px-3 text-right font-black text-emerald-600 dark:text-emerald-400">
+                  <td key={m.month_key} className="py-3 px-3 text-right font-black text-emerald-600 dark:text-emerald-400 w-[95px] min-w-[95px] max-w-[95px]">
                     {m.grand_total > 0 ? formatCurrency(m.grand_total) : '-'}
                   </td>
                 ))}
-                <td className="py-3 px-4 text-right font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/40 text-xs">
+                <td className="py-3 px-4 text-right font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/40 text-xs w-[110px] min-w-[110px] max-w-[110px]">
                   {data ? formatCurrency(data.grand_total_year) : 'R$ 0,00'}
                 </td>
               </tr>

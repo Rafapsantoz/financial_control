@@ -11,7 +11,12 @@ import {
   MacroProjectionResponse,
   FinancialPrinciple,
   Owner,
+  OwnerSettleRequest,
+  OwnerSettleResponse,
+  ReplicateInstallmentsRequest,
+  SplitItem,
   Transaction,
+  TransactionSplitRequest,
 } from '../types'
 
 const BASE_URL = '/api/v1'
@@ -81,6 +86,54 @@ export async function deleteTransaction(id: number): Promise<{ message: string }
     method: 'DELETE',
   })
   if (!res.ok) throw new Error('Falha ao excluir transação')
+  return res.json()
+}
+
+export async function splitTransaction(
+  id: number,
+  splits: SplitItem[]
+): Promise<Transaction[]> {
+  const res = await fetch(`${BASE_URL}/transactions/${id}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ splits }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao dividir lançamento' }))
+    throw new Error(err.detail || 'Falha ao dividir lançamento')
+  }
+  return res.json()
+}
+
+export async function replicateInstallments(
+  id: number,
+  options?: ReplicateInstallmentsRequest
+): Promise<Transaction[]> {
+  const res = await fetch(`${BASE_URL}/transactions/${id}/replicate-installments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || { generate_future: true, generate_past: false }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao replicar parcelas' }))
+    throw new Error(err.detail || 'Falha ao replicar parcelas')
+  }
+  return res.json()
+}
+
+export async function settleOwnerDebt(
+  ownerId: number,
+  payload: OwnerSettleRequest
+): Promise<OwnerSettleResponse> {
+  const res = await fetch(`${BASE_URL}/owners/${ownerId}/settle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao quitar débito' }))
+    throw new Error(err.detail || 'Falha ao processar quitação')
+  }
   return res.json()
 }
 

@@ -632,3 +632,154 @@ async def test_forecast_and_consolidated_liquid_separation(client: AsyncClient):
     assert dash2["total_consolidated"] == 360.00
     assert dash2["total_amount"] == 360.00
 
+
+@pytest.mark.asyncio
+async def test_transaction_split(client: AsyncClient):
+    """
+    Tests splitting a transaction into multiple child transactions across owners:
+    - Original: R$ 140.00 assigned to Irmã
+    - Split: R$ 70.00 to Irmã, R$ 70.00 to Rafael
+    - Verifies original is updated to 70.00 and a new transaction is created for Rafael with 70.00
+    """
+    owners_res = await client.get("/api/v1/owners")
+    owners_map = {o["name"]: o["id"] for o in owners_res.json()}
+    irma_id = owners_map["Irmã"]
+    rafael_id = owners_map["Rafael"]
+
+    # 1. Create original transaction
+    create_res = await client.post("/api/v1/transactions", json={
+        "dt_lcto": "2026-11-10T12:00:00Z",
+        "description": "VITTORIADASILVPARC01/02",
+        "value": 140.00,
+        "owner_id": irma_id,
+        "cur_parcs": 1,
+        "total_parcs": 2,
+    })
+    assert create_res.status_code == 201
+    orig_id = create_res.json()["id"]
+
+    # 2. Split transaction
+    split_res = await client.post(f"/api/v1/transactions/{orig_id}/split", json={
+        "splits": [
+            {"owner_id": irma_id, "amount": 70.00, "note": "Parte Irmã"},
+            {"owner_id": rafael_id, "amount": 70.00, "note": "Parte Rafael"}
+        ]
+    })
+    assert split_res.status_code == 200
+    split_data = split_res.json()
+    assert len(split_data) == 2
+
+    # Check that original is updated to 70.00
+    orig_tx = (await client.get(f"/api/v1/transactions/{orig_id}")).json()
+    assert orig_tx["value"] == 70.00
+    assert orig_tx["owner_id"] == irma_id
+
+    # Check child tx
+    new_tx_id = [t["id"] for t in split_data if t["id"] != orig_id][0]
+    child_tx = (await client.get(f"/api/v1/transactions/{new_tx_id}")).json()
+    assert child_tx["value"] == 70.00
+    assert child_tx["owner_id"] == rafael_id
+
+
+@pytest.mark.asyncio
+async def test_replicate_installments(client: AsyncClient):
+    """
+    Tests automatic replication of remaining installments for future months:
+    - Given parcel 1/3 in 2026-11
+    - Replicates parcel 2/3 in 2026-12 and 3/3 in 2027-01
+    """
+    create_res = await client.post("/api/v1/transactions", json={
+        "dt_lcto": "2026-11-05T10:00:00Z",
+        "invoice_month": "2026-11",
+        "description": "Curso Online",
+        "value": 50.00,
+        "cur_parcs": 1,
+        "total_parcs": 3,
+    })
+    assert create_res.status_code == 201
+    tx_id = create_res.json()["id"]
+
+    rep_res = await client.post(f"/api/v1/transactions/{tx_id}/replicate-installments", json={
+        "generate_future": True,
+        "generate_past": False
+    })
+    assert rep_res.status_code == 201
+    replicated = rep_res.json()
+    assert len(replicated) == 2
+
+    # Verify months and installment numbers
+    p2 = [t for t in replicated if t["cur_parcs"] == 2][0]
+    p3 = [t for t in replicated if t["cur_parcs"] == 3][0]
+
+    assert p2["invoice_month"] == "2026-12"
+    assert p2["value"] == 50.00
+    assert p3["invoice_month"] == "2027-01"
+    assert p3["value"] == 50.00
+
+
+@pytest.mark.asyncio
+async def test_owner_settle_cascade(client: AsyncClient):
+    """
+    Tests cascading debt settlement for an owner:
+    - Mãe has 3 unpaid bills: 100.00, 40.00, 30.00 (total: 170.00)
+    - She pays 150.00
+    - Cascade orders by ascending value:
+      - Bill 3 (30.00): fully paid (remaining: 120.00)
+      - Bill 2 (40.00): fully paid (remaining: 80.00)
+      - Bill 1 (100.00): split into 80.00 (paid) and 20.00 (pending)
+    """
+    owners_res = await client.get("/api/v1/owners")
+    owners_map = {o["name"]: o["id"] for o in owners_res.json()}
+    mae_id = owners_map["Mãe"]
+
+    month = "2026-10"
+
+    t1 = (await client.post("/api/v1/transactions", json={
+        "dt_lcto": f"{month}-01T10:00:00Z",
+        "description": "Conta A",
+        "value": 100.00,
+        "owner_id": mae_id,
+        "is_paid": False
+    })).json()
+
+    t2 = (await client.post("/api/v1/transactions", json={
+        "dt_lcto": f"{month}-02T10:00:00Z",
+        "description": "Conta B",
+        "value": 40.00,
+        "owner_id": mae_id,
+        "is_paid": False
+    })).json()
+
+    t3 = (await client.post("/api/v1/transactions", json={
+        "dt_lcto": f"{month}-03T10:00:00Z",
+        "description": "Conta C",
+        "value": 30.00,
+        "owner_id": mae_id,
+        "is_paid": False
+    })).json()
+
+    settle_res = await client.post(f"/api/v1/owners/{mae_id}/settle", json={
+        "month": month,
+        "payment_amount": 150.00
+    })
+    assert settle_res.status_code == 200
+    data = settle_res.json()
+
+    assert data["settled_amount"] == 150.00
+    assert data["fully_settled_count"] == 2
+    assert data["partially_settled_count"] == 1
+    assert data["remaining_pending"] == 20.00
+
+    # Verify database state
+    t1_check = (await client.get(f"/api/v1/transactions/{t1['id']}")).json()
+    t2_check = (await client.get(f"/api/v1/transactions/{t2['id']}")).json()
+    t3_check = (await client.get(f"/api/v1/transactions/{t3['id']}")).json()
+
+    assert t3_check["is_paid"] is True
+    assert t3_check["value"] == 30.00
+    assert t2_check["is_paid"] is True
+    assert t2_check["value"] == 40.00
+    assert t1_check["is_paid"] is True
+    assert t1_check["value"] == 80.00
+
+

@@ -13,6 +13,8 @@ from app.schemas.transaction import (
     TransactionCreate,
     TransactionUpdate,
     TransactionResponse,
+    TransactionSplitRequest,
+    ReplicateInstallmentsRequest,
 )
 
 router = APIRouter()
@@ -229,3 +231,176 @@ async def toggle_paid_status(id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(tx)
     return tx
+
+
+@router.post("/{id}/split", response_model=List[TransactionResponse], status_code=status.HTTP_200_OK)
+async def split_transaction(
+    id: int,
+    payload: TransactionSplitRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Split a transaction among multiple debt owners.
+    Updates the original transaction with the first split portion and creates
+    new sibling transactions for the subsequent split portions, linked via comments.
+    """
+    tx = await db.get(Transaction, id)
+    if not tx:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transação com ID {id} não encontrada.",
+        )
+
+    split_sum = round(sum(s.amount for s in payload.splits), 2)
+    original_val = round(tx.value, 2)
+    if abs(split_sum - original_val) > 0.01:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A soma das partes do rateio (R$ {split_sum:.2f}) não confere com o valor total da compra (R$ {original_val:.2f}).",
+        )
+
+    # Validate that all owners exist
+    for idx, s in enumerate(payload.splits):
+        owner = await db.get(Owner, s.owner_id)
+        if not owner:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Proprietário com ID {s.owner_id} (fatia {idx+1}) não existe.",
+            )
+
+    result_txs: List[Transaction] = []
+
+    # 1. Update the original transaction with the first split part
+    first_split = payload.splits[0]
+    tx.owner_id = first_split.owner_id
+    tx.value = round(first_split.amount, 2)
+    if first_split.is_paid is not None:
+        tx.is_paid = first_split.is_paid
+    owner_first = await db.get(Owner, first_split.owner_id)
+    first_note = first_split.comment or f"Rateio 1/{len(payload.splits)} ({owner_first.name if owner_first else ''})"
+    tx.comment = f"{tx.comment} [{first_note}]".strip() if tx.comment else first_note
+    result_txs.append(tx)
+
+    # 2. Create sibling transactions for each subsequent split part
+    for idx, s in enumerate(payload.splits[1:], start=2):
+        s_owner = await db.get(Owner, s.owner_id)
+        s_note = s.comment or f"Rateio {idx}/{len(payload.splits)} ({s_owner.name if s_owner else ''}) vinculado ao #{tx.id}"
+        sib_tx = Transaction(
+            dt_lcto=tx.dt_lcto,
+            description=tx.description,
+            value=round(s.amount, 2),
+            owner_id=s.owner_id,
+            card_id=tx.card_id,
+            type_id=tx.type_id,
+            total_parcs=tx.total_parcs,
+            cur_parcs=tx.cur_parcs,
+            comment=f"{tx.comment or ''} [{s_note}]".strip() if tx.comment else s_note,
+            invoice_month=tx.invoice_month,
+            is_paid=s.is_paid if s.is_paid is not None else False,
+            is_forecast=tx.is_forecast,
+        )
+        db.add(sib_tx)
+        result_txs.append(sib_tx)
+
+    await db.commit()
+    for item in result_txs:
+        await db.refresh(item)
+
+    return result_txs
+
+
+@router.post("/{id}/replicate-installments", response_model=List[TransactionResponse], status_code=status.HTTP_201_CREATED)
+async def replicate_installments(
+    id: int,
+    payload: ReplicateInstallmentsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Automatically replicate installment transactions across subsequent and/or past months.
+    """
+    tx = await db.get(Transaction, id)
+    if not tx:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transação com ID {id} não encontrada.",
+        )
+
+    if tx.total_parcs <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta transação não é parcelada (total de parcelas <= 1).",
+        )
+
+    # Determine base year and month
+    base_year = tx.dt_lcto.year if tx.dt_lcto else 2026
+    base_month = tx.dt_lcto.month if tx.dt_lcto else 11
+    if tx.invoice_month and len(tx.invoice_month) >= 7:
+        try:
+            parts = tx.invoice_month.split("-")
+            base_year = int(parts[0])
+            base_month = int(parts[1])
+        except Exception:
+            pass
+
+    targets: List[int] = []
+    if payload.generate_future:
+        targets.extend(range(tx.cur_parcs + 1, tx.total_parcs + 1))
+    if payload.generate_past:
+        targets.extend(range(1, tx.cur_parcs))
+
+    created_installments: List[Transaction] = []
+
+    for p in sorted(targets):
+        delta = p - tx.cur_parcs
+        tot_month = base_year * 12 + (base_month - 1) + delta
+        target_year = tot_month // 12
+        target_month_num = (tot_month % 12) + 1
+        target_invoice_month = f"{target_year:04d}-{target_month_num:02d}"
+
+        # Avoid duplicating an existing installment for the exact same target month and parcel number
+        check_query = select(Transaction).where(
+            Transaction.card_id == tx.card_id,
+            Transaction.description == tx.description,
+            Transaction.owner_id == tx.owner_id,
+            Transaction.cur_parcs == p,
+            Transaction.total_parcs == tx.total_parcs,
+            Transaction.invoice_month == target_invoice_month,
+        )
+        existing = (await db.execute(check_query)).scalars().first()
+        if existing:
+            continue
+
+        # Adjust dt_lcto safely with day capping
+        try:
+            import calendar
+            max_day = calendar.monthrange(target_year, target_month_num)[1]
+            day = min(tx.dt_lcto.day, max_day) if tx.dt_lcto else 10
+            new_dt = datetime(target_year, target_month_num, day, 12, 0, 0, tzinfo=timezone.utc)
+        except Exception:
+            new_dt = datetime(target_year, target_month_num, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Mark as forecast if target month is in the future relative to current invoice
+        is_forecast = (target_invoice_month > tx.invoice_month) if tx.invoice_month else False
+
+        new_inst = Transaction(
+            dt_lcto=new_dt,
+            description=tx.description,
+            value=tx.value,
+            owner_id=tx.owner_id,
+            card_id=tx.card_id,
+            type_id=tx.type_id,
+            total_parcs=tx.total_parcs,
+            cur_parcs=p,
+            comment=f"Parcela {p}/{tx.total_parcs} (gerada automaticamente)",
+            invoice_month=target_invoice_month,
+            is_paid=False,
+            is_forecast=is_forecast,
+        )
+        db.add(new_inst)
+        created_installments.append(new_inst)
+
+    await db.commit()
+    for item in created_installments:
+        await db.refresh(item)
+
+    return created_installments

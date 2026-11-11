@@ -1,12 +1,28 @@
 import React, { useState, useEffect } from 'react'
-import { Pencil, X, CheckCircle2, Clock } from 'lucide-react'
+import {
+  Pencil,
+  X,
+  CheckCircle2,
+  Clock,
+  Scissors,
+  Repeat,
+  Plus,
+  Trash2,
+  Check,
+  AlertTriangle,
+  Loader2,
+  Users,
+} from 'lucide-react'
 import { Card, Category, Owner, Transaction } from '../../types'
+import { splitTransaction, replicateInstallments } from '../../lib/api'
+import { formatCurrency } from '../../lib/formatters'
 
 interface EditTransactionModalProps {
   isOpen: boolean
   transaction: Transaction | null
   onClose: () => void
   onSave: (id: number, data: Partial<Transaction>) => Promise<void>
+  onSuccessRefresh?: () => void
   owners: Owner[]
   cards: Card[]
   categories: Category[]
@@ -17,6 +33,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   transaction,
   onClose,
   onSave,
+  onSuccessRefresh,
   owners,
   cards,
   categories,
@@ -41,6 +58,21 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [comment, setComment] = useState(transaction.comment || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [successBanner, setSuccessBanner] = useState('')
+
+  // Split state
+  const [isSplitOpen, setIsSplitOpen] = useState(false)
+  const [splits, setSplits] = useState<{ owner_id: number; amount: string }[]>([
+    { owner_id: transaction.owner_id || owners[0]?.id || 1, amount: String((transaction.value / 2).toFixed(2)) },
+    {
+      owner_id: owners.find((o) => o.id !== transaction.owner_id)?.id || owners[1]?.id || owners[0]?.id || 1,
+      amount: String((transaction.value / 2).toFixed(2)),
+    },
+  ])
+  const [isSplitting, setIsSplitting] = useState(false)
+
+  // Replicate state
+  const [isReplicating, setIsReplicating] = useState(false)
 
   // Sync state whenever selected transaction changes
   useEffect(() => {
@@ -58,26 +90,93 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setIsForecast(transaction.is_forecast || false)
       setComment(transaction.comment || '')
       setErrorMsg('')
+      setSuccessBanner('')
+      setIsSplitOpen(false)
+
+      const half = Math.round((transaction.value / 2) * 100) / 100
+      const otherHalf = Math.round((transaction.value - half) * 100) / 100
+      setSplits([
+        { owner_id: transaction.owner_id || owners[0]?.id || 1, amount: String(half) },
+        {
+          owner_id: owners.find((o) => o.id !== transaction.owner_id)?.id || owners[1]?.id || owners[0]?.id || 1,
+          amount: String(otherHalf),
+        },
+      ])
     }
-  }, [transaction, owners, categories])
+  }, [transaction, owners])
+
+  const totalSplitValue = splits.reduce((acc, s) => acc + (parseFloat(s.amount.replace(',', '.')) || 0), 0)
+  const origNumVal = parseFloat(value.replace(',', '.')) || transaction.value
+  const splitDiff = Math.round((origNumVal - totalSplitValue) * 100) / 100
+  const isSplitBalanced = Math.abs(splitDiff) <= 0.01
+
+  const handle5050 = () => {
+    if (splits.length < 2) return
+    const perPerson = Math.round((origNumVal / splits.length) * 100) / 100
+    const remainder = Math.round((origNumVal - perPerson * (splits.length - 1)) * 100) / 100
+    setSplits(
+      splits.map((s, idx) => ({
+        ...s,
+        amount: idx === splits.length - 1 ? String(remainder) : String(perPerson),
+      }))
+    )
+  }
+
+  const handleExecuteSplit = async () => {
+    if (!isSplitBalanced) {
+      setErrorMsg(`A soma das partes (R$ ${totalSplitValue.toFixed(2)}) deve ser igual ao valor total (R$ ${origNumVal.toFixed(2)}). Diferença: R$ ${splitDiff.toFixed(2)}`)
+      return
+    }
+
+    try {
+      setIsSplitting(true)
+      setErrorMsg('')
+      await splitTransaction(
+        transaction.id,
+        splits.map((s) => ({
+          owner_id: s.owner_id,
+          amount: parseFloat(s.amount.replace(',', '.')) || 0,
+        }))
+      )
+      setSuccessBanner('Lançamento dividido com sucesso em títulos individuais!')
+      setTimeout(() => {
+        if (onSuccessRefresh) onSuccessRefresh()
+        onClose()
+      }, 1000)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao dividir lançamento.')
+    } finally {
+      setIsSplitting(false)
+    }
+  }
+
+  const handleReplicate = async () => {
+    try {
+      setIsReplicating(true)
+      setErrorMsg('')
+      const created = await replicateInstallments(transaction.id, {
+        generate_future: true,
+        generate_past: false,
+      })
+      setSuccessBanner(`${created.length} parcelas subsequentes geradas com sucesso nos meses futuros!`)
+      setTimeout(() => {
+        if (onSuccessRefresh) onSuccessRefresh()
+        onClose()
+      }, 1200)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao replicar parcelas.')
+    } finally {
+      setIsReplicating(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
 
-    if (!description.trim()) {
-      setErrorMsg('Informe a descrição da despesa.')
-      return
-    }
-
-    const numVal = parseFloat(String(value).replace(',', '.'))
-    if (isNaN(numVal) || numVal <= 0) {
+    const numValue = parseFloat(value.replace(',', '.'))
+    if (isNaN(numValue) || numValue <= 0) {
       setErrorMsg('Informe um valor válido maior que zero.')
-      return
-    }
-
-    if (curParcs > totalParcs) {
-      setErrorMsg(`A parcela atual (${curParcs}) não pode ser maior que o total de parcelas (${totalParcs}).`)
       return
     }
 
@@ -85,9 +184,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setIsSubmitting(true)
       await onSave(transaction.id, {
         description: description.trim(),
-        value: numVal,
+        value: numValue,
         dt_lcto: `${date}T12:00:00Z`,
-        invoice_month: invoiceMonth || date.slice(0, 7),
+        invoice_month: invoiceMonth,
         owner_id: ownerId,
         card_id: cardId,
         type_id: categoryId,
@@ -99,24 +198,28 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       })
       onClose()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao salvar alterações.')
+      setErrorMsg(err.message || 'Falha ao salvar alterações.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-xs">
               <Pencil className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">Editar Lançamento</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">ID #{transaction.id}</p>
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                Editar Lançamento
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                ID #{transaction.id}
+              </p>
             </div>
           </div>
           <button
@@ -130,8 +233,16 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-medium">
-              {errorMsg}
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successBanner && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+              <span>{successBanner}</span>
             </div>
           )}
 
@@ -150,7 +261,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             />
           </div>
 
-          {/* Valor, Data da Compra e Fatura de Cobrança */}
+          {/* Valor, Data da Compra e Mês da Fatura */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -159,11 +270,11 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 required
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100 font-semibold"
-                placeholder="0.00"
+                className="w-full px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100"
               />
             </div>
             <div>
@@ -240,7 +351,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 onChange={(e) => setCardId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 dark:text-slate-100"
               >
-                <option value="">Sem Cartão</option>
+                <option value="">Sem Cartão (Custo Fixo / Direto)</option>
                 {cards.map((card) => (
                   <option key={card.id} value={card.id}>
                     {card.card_name}
@@ -348,6 +459,181 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700 cursor-pointer"
             />
           </div>
+
+          {/* ======================================================== */}
+          {/* FEATURE 1: DIVIDIR LANÇAMENTO (SPLIT DE DESPESA) */}
+          {/* ======================================================== */}
+          <div className="border border-indigo-200 dark:border-indigo-900/60 rounded-xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-950/20">
+            <button
+              type="button"
+              onClick={() => setIsSplitOpen(!isSplitOpen)}
+              className="w-full p-3 flex items-center justify-between text-left hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                  <Scissors className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Dividir Lançamento (Rateio Familiar)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Cria títulos vinculados para pessoas diferentes (ex: {formatCurrency(origNumVal)} dividido entre Irmã e Rafael)
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                {isSplitOpen ? 'Recolher ▲' : 'Configurar Divisão ▼'}
+              </span>
+            </button>
+
+            {isSplitOpen && (
+              <div className="p-3 border-t border-indigo-100 dark:border-indigo-900/60 space-y-3 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Distribua o valor total:</span>
+                  <button
+                    type="button"
+                    onClick={handle5050}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 underline"
+                  >
+                    Dividir Meio a Meio (50% / 50%)
+                  </button>
+                </div>
+
+                {/* Split Participants List */}
+                <div className="space-y-2">
+                  {splits.map((s, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <select
+                        value={s.owner_id}
+                        onChange={(e) => {
+                          const newOwnerId = Number(e.target.value)
+                          setSplits((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, owner_id: newOwnerId } : item))
+                          )
+                        }}
+                        className="flex-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      >
+                        {owners.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="relative w-28 shrink-0">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">
+                          R$
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={s.amount}
+                          onChange={(e) => {
+                            const valStr = e.target.value
+                            setSplits((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, amount: valStr } : item))
+                            )
+                          }}
+                          className="w-full pl-7 pr-2 py-1.5 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                        />
+                      </div>
+
+                      {splits.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setSplits((prev) => prev.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const unusedOwner = owners.find((o) => !splits.some((s) => s.owner_id === o.id)) || owners[0]
+                      setSplits((prev) => [...prev, { owner_id: unusedOwner?.id || 1, amount: '0.00' }])
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar outra pessoa</span>
+                  </button>
+
+                  <div className="text-right text-xs">
+                    <span className="text-slate-400 text-[11px]">Soma: </span>
+                    <span
+                      className={`font-extrabold ${
+                        isSplitBalanced ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {formatCurrency(totalSplitValue)} / {formatCurrency(origNumVal)}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExecuteSplit}
+                  disabled={isSplitting || !isSplitBalanced}
+                  className="w-full py-2 px-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  {isSplitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dividindo lançamento...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Scissors className="w-3.5 h-3.5" />
+                      <span>Confirmar Divisão de Lançamento</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ======================================================== */}
+          {/* FEATURE 3: REPLICAR PARCELAS NOS MESES SUBSEQUENTES */}
+          {/* ======================================================== */}
+          {totalParcs > 1 && (
+            <div className="border border-teal-200 dark:border-teal-900/60 rounded-xl p-3 bg-teal-50/40 dark:bg-teal-950/20 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 shrink-0">
+                  <Repeat className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Projeção Automática de Parcelas
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    Compra em {curParcs}/{totalParcs}x. Replicar parcelas restantes nos próximos meses.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleReplicate}
+                disabled={isReplicating}
+                className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/60 dark:hover:bg-teal-800 border border-teal-300 dark:border-teal-700 transition-all flex items-center gap-1.5"
+              >
+                {isReplicating ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Repeat className="w-3.5 h-3.5" />
+                )}
+                <span>Gerar Parcelas</span>
+              </button>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">

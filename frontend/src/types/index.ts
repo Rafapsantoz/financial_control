@@ -215,3 +215,33 @@ export interface MacroProjectionResponse {
   categories_matrix: Record<string, Record<string, number>>
   grand_total_year: number
 }
+
+export interface SplitItem {
+  owner_id: number
+  amount: number
+  comment?: string
+  is_paid?: boolean
+}
+
+export interface TransactionSplitRequest {
+  splits: SplitItem[]
+}
+
+export interface ReplicateInstallmentsRequest {
+  generate_future?: boolean
+  generate_past?: boolean
+}
+
+export interface OwnerSettleRequest {
+  payment_amount: number
+  month: string
+}
+
+export interface OwnerSettleResponse {
+  owner_id: number
+  settled_amount: number
+  fully_settled_count: number
+  partially_settled_count: number
+  remaining_pending: number
+  message: string
+}

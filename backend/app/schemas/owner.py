@@ -40,3 +40,17 @@ class OwnerResponse(OwnerBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OwnerSettleRequest(BaseModel):
+    payment_amount: float = Field(..., gt=0.0, description="Valor pago em R$ a ser rateado e abatido")
+    month: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Mês de competência (YYYY-MM)")
+
+
+class OwnerSettleResponse(BaseModel):
+    owner_id: int
+    settled_amount: float
+    fully_settled_count: int
+    partially_settled_count: int
+    remaining_pending: float
+    message: str

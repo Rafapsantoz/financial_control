@@ -194,6 +194,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 onChange={(e) => setCardId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-slate-100"
               >
+                <option value="">Sem Cartão (Custo Fixo / Direto)</option>
                 {cards.map((card) => (
                   <option key={card.id} value={card.id}>
                     {card.card_name}

@@ -92,3 +92,19 @@ class TransactionResponse(TransactionBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SplitItem(BaseModel):
+    owner_id: int = Field(..., description="ID do responsável para esta fatia do rateio")
+    amount: float = Field(..., gt=0.0, description="Valor desta fatia em R$")
+    comment: Optional[str] = Field(default=None, description="Observação específica para esta fatia")
+    is_paid: Optional[bool] = Field(default=False, description="Status de pagamento desta fatia")
+
+
+class TransactionSplitRequest(BaseModel):
+    splits: list[SplitItem] = Field(..., min_length=2, description="Lista de pessoas e valores para dividir o lançamento")
+
+
+class ReplicateInstallmentsRequest(BaseModel):
+    generate_future: bool = Field(default=True, description="Se True, gera parcelas para os meses subsequentes")
+    generate_past: bool = Field(default=False, description="Se True, gera parcelas para os meses anteriores")
