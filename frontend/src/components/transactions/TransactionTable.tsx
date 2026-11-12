@@ -3,7 +3,10 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Download,
+  FileSpreadsheet,
   Filter,
+  Loader2,
   Pencil,
   Search,
   Trash2,
@@ -14,6 +17,7 @@ import {
 } from 'lucide-react'
 import { Card, Category, Owner, Transaction } from '../../types'
 import { formatCurrency, formatDate } from '../../lib/formatters'
+import { exportTransactionsExcel } from '../../lib/api'
 
 interface TransactionTableProps {
   transactions: Transaction[]
@@ -66,6 +70,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
   const [internalForecastFilter, setInternalForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
+  const [isExporting, setIsExporting] = useState(false)
 
   const statusFilter = statusFilterProp ?? internalStatusFilter
   const setStatusFilter = onStatusFilterChangeProp ?? setInternalStatusFilter
@@ -76,6 +81,32 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   const ownersMap = new Map(owners.map((o) => [o.id, o]))
   const cardsMap = new Map(cards.map((c) => [c.id, c]))
   const categoriesMap = new Map(categories.map((cat) => [cat.id, cat]))
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true)
+      const blob = await exportTransactionsExcel({
+        month: currentMonth,
+        owner_id: selectedOwnerId,
+        is_paid: statusFilter === 'pending' ? false : statusFilter === 'paid' ? true : null,
+        is_forecast: forecastFilter === 'effective' ? false : forecastFilter === 'forecast' ? true : null,
+        search: searchTerm.trim() || undefined,
+      })
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = `transacoes_${currentMonth || 'geral'}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(downloadUrl)
+    } catch (err: any) {
+      console.error('Erro na exportação:', err)
+      alert(err.message || 'Erro ao exportar planilha Excel')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   // Filter transactions
   const filtered = transactions.filter((tx) => {
@@ -290,6 +321,22 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
               Previstos
             </button>
           </div>
+
+          {/* Export XLS / Excel Button */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs shadow-emerald-600/25 transition-all cursor-pointer active:scale-95 disabled:opacity-50 ml-auto sm:ml-0"
+            title="Exportar lançamentos filtrados para planilha Excel (.xls / .xlsx)"
+          >
+            {isExporting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
+            )}
+            <span>{isExporting ? 'Gerando...' : 'Exportar .XLS'}</span>
+          </button>
         </div>
       </div>
 

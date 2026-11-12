@@ -380,3 +380,27 @@ export async function fetchPrinciples(): Promise<FinancialPrinciple[]> {
   if (!res.ok) throw new Error('Falha ao buscar princípios')
   return res.json()
 }
+
+export async function exportTransactionsExcel(params: {
+  month?: string
+  owner_id?: number | null
+  card_id?: number | null
+  is_paid?: boolean | null
+  is_forecast?: boolean | null
+  search?: string
+}): Promise<Blob> {
+  const q = new URLSearchParams()
+  if (params.month) q.append('month', params.month)
+  if (params.owner_id !== undefined && params.owner_id !== null) q.append('owner_id', String(params.owner_id))
+  if (params.card_id !== undefined && params.card_id !== null) q.append('card_id', String(params.card_id))
+  if (params.is_paid !== undefined && params.is_paid !== null) q.append('is_paid', String(params.is_paid))
+  if (params.is_forecast !== undefined && params.is_forecast !== null) q.append('is_forecast', String(params.is_forecast))
+  if (params.search) q.append('search', params.search)
+
+  const res = await fetch(`${BASE_URL}/transactions/export?${q.toString()}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao exportar planilha' }))
+    throw new Error(err.detail || 'Falha ao exportar planilha Excel')
+  }
+  return res.blob()
+}

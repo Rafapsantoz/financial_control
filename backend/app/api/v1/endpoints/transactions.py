@@ -1,6 +1,11 @@
+import io
 from typing import List, Optional
 from datetime import datetime, timezone
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, or_, select
 
@@ -128,6 +133,230 @@ async def create_transaction(
     await db.commit()
     await db.refresh(db_tx)
     return db_tx
+
+
+@router.get(
+    "/export",
+    status_code=status.HTTP_200_OK,
+    summary="Exporta lançamentos e compras para planilha Excel (.xlsx / .xls)",
+)
+async def export_transactions_excel(
+    month: Optional[str] = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Mês YYYY-MM"),
+    card_id: Optional[int] = Query(None, description="Filtrar por cartão"),
+    owner_id: Optional[int] = Query(None, description="Filtrar por responsável"),
+    type_id: Optional[int] = Query(None, description="Filtrar por categoria"),
+    is_paid: Optional[bool] = Query(None, description="Filtrar por status de quitação"),
+    is_forecast: Optional[bool] = Query(None, description="Filtrar previsões"),
+    search: Optional[str] = Query(None, description="Busca textual na descrição ou comentário"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Gera dinamicamente uma planilha Excel (.xlsx / .xls) contendo todas as transações
+    filtradas, formatada com estilos profissionais, moedas, status e somatórios.
+    """
+    query = select(Transaction)
+
+    if month:
+        year_str, month_str = month.split("-")
+        year = int(year_str)
+        month_num = int(month_str)
+        start_date = datetime(year, month_num, 1, 0, 0, 0, tzinfo=timezone.utc)
+        if month_num == 12:
+            end_date = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        else:
+            end_date = datetime(year, month_num + 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        month_filter = or_(
+            Transaction.invoice_month == month,
+            and_(
+                Transaction.invoice_month.is_(None),
+                Transaction.dt_lcto >= start_date,
+                Transaction.dt_lcto < end_date,
+            ),
+        )
+        query = query.where(month_filter)
+
+    if card_id is not None:
+        query = query.where(Transaction.card_id == card_id)
+
+    if owner_id is not None:
+        query = query.where(Transaction.owner_id == owner_id)
+
+    if type_id is not None:
+        query = query.where(Transaction.type_id == type_id)
+
+    if is_paid is not None:
+        query = query.where(Transaction.is_paid == is_paid)
+
+    if is_forecast is not None:
+        query = query.where(Transaction.is_forecast == is_forecast)
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                Transaction.description.ilike(term),
+                Transaction.comment.ilike(term),
+            )
+        )
+
+    query = query.order_by(Transaction.dt_lcto.asc(), Transaction.id.asc())
+    result = await db.execute(query)
+    transactions = result.scalars().all()
+
+    # Pre-fetch maps for fast names
+    owners_res = await db.execute(select(Owner))
+    owners_map = {o.id: o.name for o in owners_res.scalars().all()}
+
+    cats_res = await db.execute(select(Category))
+    cats_map = {c.id: c.description for c in cats_res.scalars().all()}
+
+    cards_res = await db.execute(select(Card))
+    cards_map = {c.id: c.card_name for c in cards_res.scalars().all()}
+
+    # Create Workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Fatura {month or 'Geral'}"
+
+    # Header styling
+    header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")  # Dark teal
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    headers = [
+        "Data",
+        "Descrição do Lançamento",
+        "Responsável",
+        "Categoria",
+        "Cartão / Conta",
+        "Parcelas",
+        "Tipo",
+        "Valor (R$)",
+        "Status Quitação",
+        "Previsão",
+        "Mês Cobrança",
+        "Observações",
+    ]
+    ws.append(headers)
+    ws.row_dimensions[1].height = 28
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    # Data rows styling
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+    regular_font = Font(name="Segoe UI", size=10)
+    bold_font = Font(name="Segoe UI", size=10, bold=True)
+    green_font = Font(name="Segoe UI", size=10, color="047857", bold=True)
+    red_font = Font(name="Segoe UI", size=10, color="BE123C", bold=True)
+
+    total_expenses = 0.0
+    total_incomes = 0.0
+
+    for idx, tx in enumerate(transactions, start=2):
+        dt_str = tx.dt_lcto.strftime("%d/%m/%Y") if tx.dt_lcto else ""
+        owner_name = owners_map.get(tx.owner_id, "Não atribuído")
+        category_name = cats_map.get(tx.type_id, "Outros")
+        card_name = cards_map.get(tx.card_id, "Sem Cartão / Direto")
+        parcs_str = f"{tx.cur_parcs}/{tx.total_parcs}" if tx.total_parcs > 1 else "À vista"
+        entry_type_str = "Receita" if getattr(tx, "entry_type", "expense") == "income" else "Despesa"
+        val = round(float(tx.value), 2)
+        status_str = "Pago" if tx.is_paid else "Pendente"
+        forecast_str = "Previsto" if tx.is_forecast else "Efetivo"
+        inv_month_str = tx.invoice_month or ""
+        comment_str = tx.comment or ""
+
+        if entry_type_str == "Receita":
+            total_incomes += val
+        else:
+            total_expenses += val
+
+        row_data = [
+            dt_str,
+            tx.description,
+            owner_name,
+            category_name,
+            card_name,
+            parcs_str,
+            entry_type_str,
+            val,
+            status_str,
+            forecast_str,
+            inv_month_str,
+            comment_str,
+        ]
+        ws.append(row_data)
+        ws.row_dimensions[idx].height = 20
+
+        # Style cells in this row
+        for col_idx in range(1, len(headers) + 1):
+            c = ws.cell(row=idx, column=col_idx)
+            c.border = thin_border
+            c.font = regular_font
+
+            if col_idx in (1, 6, 11):
+                c.alignment = Alignment(horizontal="center")
+            elif col_idx == 8:
+                c.number_format = '"R$" #,##0.00'
+                c.alignment = Alignment(horizontal="right")
+                if entry_type_str == "Receita":
+                    c.font = green_font
+                else:
+                    c.font = bold_font
+            elif col_idx == 9:
+                c.alignment = Alignment(horizontal="center")
+                c.font = green_font if tx.is_paid else red_font
+
+    # Summary rows at bottom
+    last_row = len(transactions) + 1
+    total_row_idx = last_row + 1
+    ws.cell(row=total_row_idx, column=2, value="TOTAL DESPESAS:").font = bold_font
+    c_tot = ws.cell(row=total_row_idx, column=8, value=total_expenses)
+    c_tot.font = bold_font
+    c_tot.number_format = '"R$" #,##0.00'
+    c_tot.alignment = Alignment(horizontal="right")
+
+    if total_incomes > 0:
+        inc_row_idx = total_row_idx + 1
+        ws.cell(row=inc_row_idx, column=2, value="TOTAL RECEITAS:").font = green_font
+        c_inc = ws.cell(row=inc_row_idx, column=8, value=total_incomes)
+        c_inc.font = green_font
+        c_inc.number_format = '"R$" #,##0.00'
+        c_inc.alignment = Alignment(horizontal="right")
+
+    # Auto-adjust column widths
+    for col in ws.columns:
+        col_letter = get_column_letter(col[0].column)
+        max_len = 0
+        for cell in col:
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # Save to memory stream
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"fatura_{month or 'geral'}.xlsx"
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 @router.get("/{id}", response_model=TransactionResponse, status_code=status.HTTP_200_OK)
