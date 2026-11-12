@@ -26,71 +26,90 @@ router = APIRouter()
     "/extract",
     response_model=ExtractedInvoiceResponse,
     status_code=status.HTTP_200_OK,
-    summary="Extrai compras e parcelas de fatura PDF via Gemini",
+    summary="Extrai compras e parcelas de faturas, fotos ou planilhas via Gemini",
 )
 async def extract_invoice(
-    file: UploadFile = File(..., description="Arquivo PDF da fatura do cartão de crédito"),
+    file: Optional[UploadFile] = File(None, description="Arquivo único (PDF, foto, planilha)"),
+    files: Optional[List[UploadFile]] = File(None, description="Múltiplos arquivos ou imagens coladas via Ctrl+V"),
     card_id: Optional[int] = Query(None, description="ID opcional do cartão (via query)"),
     card_id_form: Optional[int] = Form(None, alias="card_id", description="ID opcional do cartão (via form data)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Recebe um arquivo PDF de fatura de cartão de crédito e extrai compras, parcelas,
-    emissor e período através do Google Gemini com Structured Outputs.
+    Recebe um ou mais arquivos (PDF de fatura, imagens/prints colados via Ctrl+V ou planilhas)
+    e extrai compras, parcelas, emissor e período através do Google Gemini com Structured Outputs.
     Aplica heurísticas familiares (Rafael, Mãe, Irmã), normalização de categorias e
     verificação de duplicidades (RN02).
     """
     effective_card_id = card_id_form if card_id_form is not None else card_id
 
-    # 1. Validate content type and filename extension (PDF, Images, Spreadsheets)
-    filename = file.filename or ""
-    content_type = file.content_type or ""
-    lower_fn = filename.lower()
-    lower_ct = content_type.lower()
+    # 1. Gather all files sent (supports both single 'file' and multiple 'files' via Ctrl+V)
+    all_uploads: List[UploadFile] = []
+    if files:
+        for f in files:
+            if f is not None and f.filename and f not in all_uploads:
+                all_uploads.append(f)
+    if file is not None and file.filename and file not in all_uploads:
+        all_uploads.append(file)
 
-    is_pdf = lower_fn.endswith(".pdf") or "pdf" in lower_ct
-    is_img = any(lower_fn.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".heic"]) or "image" in lower_ct
-    is_sheet = any(lower_fn.endswith(ext) for ext in [".xlsx", ".xls", ".csv"]) or "sheet" in lower_ct or "csv" in lower_ct
-
-    if not (is_pdf or is_img or is_sheet):
+    if not all_uploads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Apenas arquivos no formato PDF são aceitos para extração (ou imagens PNG/JPG/WEBP e planilhas XLSX/CSV).",
         )
 
-    # 2. Read bytes into memory
-    pdf_bytes = await file.read()
-    if not pdf_bytes or len(pdf_bytes) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O arquivo enviado está vazio (0 bytes).",
-        )
+    # 2. Read bytes and validate each uploaded file
+    file_records: List[tuple[str, bytes, str]] = []
 
-    # 3. Validate PDF magic number if it is a PDF file
-    if is_pdf and not pdf_bytes.startswith(b"%PDF-"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Arquivo inválido ou corrompido: cabeçalho PDF (%PDF-) não identificado.",
-        )
+    for upload in all_uploads:
+        fn = upload.filename or ""
+        ct = upload.content_type or ""
+        lower_fn = fn.lower()
+        lower_ct = ct.lower()
 
-    if is_pdf:
-        effective_mime_type = "application/pdf"
-    elif lower_fn.endswith(".png"):
-        effective_mime_type = "image/png"
-    elif lower_fn.endswith(".jpg") or lower_fn.endswith(".jpeg"):
-        effective_mime_type = "image/jpeg"
-    elif lower_fn.endswith(".webp"):
-        effective_mime_type = "image/webp"
-    elif lower_fn.endswith(".csv"):
-        effective_mime_type = "text/csv"
-    elif lower_fn.endswith(".xlsx"):
-        effective_mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    elif lower_fn.endswith(".xls"):
-        effective_mime_type = "application/vnd.ms-excel"
-    else:
-        effective_mime_type = content_type or "application/pdf"
+        is_pdf = lower_fn.endswith(".pdf") or "pdf" in lower_ct
+        is_img = any(lower_fn.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".heic"]) or "image" in lower_ct
+        is_sheet = any(lower_fn.endswith(ext) for ext in [".xlsx", ".xls", ".csv"]) or "sheet" in lower_ct or "csv" in lower_ct
 
-    # 4. Validate card existence if provided
+        if not (is_pdf or is_img or is_sheet):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Apenas arquivos no formato PDF são aceitos para extração (ou imagens PNG/JPG/WEBP e planilhas XLSX/CSV).",
+            )
+
+        f_bytes = await upload.read()
+        if not f_bytes or len(f_bytes) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"O arquivo enviado '{fn}' está vazio (0 bytes).",
+            )
+
+        if is_pdf and not f_bytes.startswith(b"%PDF-"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Arquivo inválido ou corrompido: cabeçalho PDF (%PDF-) não identificado.",
+            )
+
+        if is_pdf:
+            effective_mime = "application/pdf"
+        elif lower_fn.endswith(".png"):
+            effective_mime = "image/png"
+        elif lower_fn.endswith(".jpg") or lower_fn.endswith(".jpeg"):
+            effective_mime = "image/jpeg"
+        elif lower_fn.endswith(".webp"):
+            effective_mime = "image/webp"
+        elif lower_fn.endswith(".csv"):
+            effective_mime = "text/csv"
+        elif lower_fn.endswith(".xlsx"):
+            effective_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif lower_fn.endswith(".xls"):
+            effective_mime = "application/vnd.ms-excel"
+        else:
+            effective_mime = ct or "image/png"
+
+        file_records.append((fn, f_bytes, effective_mime))
+
+    # 3. Validate card existence if provided
     if effective_card_id is not None:
         card = await db.get(Card, effective_card_id)
         if not card:
@@ -99,16 +118,17 @@ async def extract_invoice(
                 detail=f"Cartão com ID {effective_card_id} não existe no sistema.",
             )
 
-    # 5. Calculate SHA-256 hash to prevent duplicate file uploads
-    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
+    # 4. Calculate SHA-256 hash to prevent duplicate file uploads
+    file_hash = hashlib.sha256(b"".join(r[1] for r in file_records)).hexdigest()
 
-    # 6. Extract and enrich via Gemini
+    # 5. Extract and enrich via Gemini (supports multiple images/prints)
     extracted_data = await extract_invoice_from_pdf(
         db=db,
-        pdf_bytes=pdf_bytes,
+        pdf_bytes=file_records[0][1],
         card_id=effective_card_id,
-        mime_type=effective_mime_type,
-        filename=filename,
+        mime_type=file_records[0][2],
+        filename=file_records[0][0],
+        all_records=file_records,
     )
     extracted_data.file_hash = file_hash
 

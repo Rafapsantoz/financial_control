@@ -1,12 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   AlertTriangle,
   Bot,
   CheckCircle2,
+  Clipboard,
   FileText,
   FileUp,
+  Image as ImageIcon,
   Loader2,
+  Plus,
   Sparkles,
+  Trash2,
   Upload,
   X,
   CreditCard,
@@ -24,6 +28,7 @@ interface InvoiceUploaderModalProps {
   cards: Card[]
   categories: Category[]
   currentMonth: string
+  initialFiles?: File[]
 }
 
 export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
@@ -34,10 +39,11 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
   cards,
   categories,
   currentMonth,
+  initialFiles = [],
 }) => {
   if (!isOpen) return null
 
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>(initialFiles)
   const [selectedCardId, setSelectedCardId] = useState<number | null>(cards[0]?.id || null)
   const [targetMonth, setTargetMonth] = useState<string>(currentMonth)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -50,24 +56,91 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0]
-      const lower = selected.name.toLowerCase()
-      const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic', '.csv', '.xlsx', '.xls']
-      if (!validExtensions.some((ext) => lower.endsWith(ext))) {
-        setErrorMsg('Por favor, selecione um arquivo suportado (PDF, Foto PNG/JPG ou Planilha XLSX/CSV).')
-        return
+  // Sync initialFiles when passed
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setFiles((prev) => {
+        const existingSignatures = new Set(prev.map((f) => `${f.name}_${f.size}`))
+        const fresh = initialFiles.filter((f) => !existingSignatures.has(`${f.name}_${f.size}`))
+        return [...prev, ...fresh]
+      })
+    }
+  }, [initialFiles])
+
+  // Helper to add files with validation
+  const addFiles = (newFiles: File[]) => {
+    const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic', '.csv', '.xlsx', '.xls']
+    const valid = newFiles.filter((f) => {
+      const lower = f.name.toLowerCase()
+      return validExtensions.some((ext) => lower.endsWith(ext)) || f.type.startsWith('image/')
+    })
+
+    if (valid.length === 0) {
+      setErrorMsg('Nenhum arquivo válido suportado (suporta prints PNG/JPG, fotos de recibos, PDFs ou planilhas).')
+      return
+    }
+
+    setFiles((prev) => [...prev, ...valid])
+    setReplaceExisting(false)
+    setErrorMsg('')
+    setSuccessMsg(`📸 ${valid.length} ${valid.length === 1 ? 'imagem/arquivo adicionado' : 'imagens adicionadas'}! (Pode colar mais com Ctrl+V)`)
+    setTimeout(() => setSuccessMsg(''), 3000)
+  }
+
+  // Global Ctrl + V listener when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handlePaste = (e: ClipboardEvent) => {
+      // If focused inside text input or textarea, only intercept if clipboard has image data
+      const target = e.target as HTMLElement
+      const isTextInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+
+      const pasted: File[] = []
+
+      // 1. Files copied from file explorer or clipboard
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          pasted.push(e.clipboardData.files[i])
+        }
       }
-      setFile(selected)
-      setReplaceExisting(false)
-      setErrorMsg('')
+
+      // 2. Blobs from screenshot (Win+Shift+S / Snipping Tool / WhatsApp print)
+      if (pasted.length === 0 && e.clipboardData?.items) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i]
+          if (item.type.startsWith('image/')) {
+            const blob = item.getAsFile()
+            if (blob) {
+              const ext = blob.type.split('/')[1] || 'png'
+              const now = new Date()
+              const timeStr = `${now.getHours()}h${now.getMinutes()}m${now.getSeconds()}s`
+              const file = new File([blob], `print_${timeStr}_${i + 1}.${ext}`, { type: blob.type })
+              pasted.push(file)
+            }
+          }
+        }
+      }
+
+      if (pasted.length > 0) {
+        e.preventDefault()
+        addFiles(pasted)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [isOpen])
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(Array.from(e.target.files))
     }
   }
 
   const handleExtract = async () => {
-    if (!file) {
-      setErrorMsg('Selecione um arquivo (PDF, foto ou planilha) para continuar.')
+    if (files.length === 0) {
+      setErrorMsg('Adicione ou cole ao menos uma imagem/print (Ctrl + V) para continuar.')
       return
     }
 
@@ -75,7 +148,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
       setIsExtracting(true)
       setErrorMsg('')
       setReplaceExisting(false)
-      const result = await extractInvoiceFromPDF(file, selectedCardId)
+      const result = await extractInvoiceFromPDF(files, selectedCardId)
       setExtractedData(result)
       if (result.invoice_month_year && /^\d{4}-(0[1-9]|1[0-2])$/.test(result.invoice_month_year)) {
         setTargetMonth(result.invoice_month_year)
@@ -117,7 +190,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
 
       setEditedItems(mapped)
     } catch (err: any) {
-      setErrorMsg(err.message || 'Falha na extração da fatura com a IA Gemini.')
+      setErrorMsg(err.message || 'Falha na extração com a IA Gemini.')
     } finally {
       setIsExtracting(false)
     }
@@ -140,7 +213,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
         target_month: finalMonth,
         project_future_installments: false,
         file_hash: extractedData?.file_hash || undefined,
-        filename: file?.name || undefined,
+        filename: files.map((f) => f.name).join(', ') || undefined,
         bank_or_issuer: extractedData?.bank_or_issuer || undefined,
         replace_existing: replaceExisting,
         items: selectedToPersist.map((item) => ({
@@ -242,59 +315,160 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                 </div>
               </div>
 
-              {/* Dropzone */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  2. Arquivo (PDF, Foto ou Planilha)
-                </label>
-                <label className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer bg-slate-50 dark:bg-slate-850 text-center">
-                  <input
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    disabled={isExtracting}
-                  />
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 shadow-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-3">
-                    <FileUp className="w-6 h-6" />
+              {/* Dropzone & Multi-image Paste Zone */}
+              {files.length === 0 ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>2. Arquivos ou Imagens (Suporta Ctrl + V)</span>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-normal">
+                      Cole prints da tela ou selecione múltiplos arquivos
+                    </span>
+                  </label>
+                  <label
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        addFiles(Array.from(e.dataTransfer.files))
+                      }
+                    }}
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer bg-slate-50 dark:bg-slate-850 text-center"
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                      className="hidden"
+                      onChange={handleFileChange}
+                      disabled={isExtracting}
+                    />
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 mb-3">
+                      <Clipboard className="w-7 h-7" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                      Pressione <kbd className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300">Ctrl + V</kbd> para colar imagens aqui
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+                      Tire um print (<kbd className="font-mono bg-slate-200 dark:bg-slate-700 px-1 rounded">Win + Shift + S</kbd>) ou copie fotos de comprovantes e cole diretamente. Você pode colar várias imagens seguidas!
+                    </p>
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                      <FileUp className="w-3.5 h-3.5" />
+                      <span>Ou clique para selecionar fotos, PDFs ou planilhas do computador</span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>
+                          {files.length} {files.length === 1 ? 'imagem / arquivo pronto' : 'imagens / arquivos prontos'}
+                        </span>
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-300 dark:border-emerald-800">
+                        Ctrl + V ativo (cole mais imagens se quiser)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFiles([])}
+                      className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                    >
+                      Limpar todas
+                    </button>
                   </div>
-                  {file ? (
-                    <div>
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{file.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {(file.size / 1024).toFixed(1)} KB — Clique para trocar
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        Clique para selecionar ou arraste o arquivo aqui
-                      </p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                        Formatos aceitos: Faturas em PDF, Fotos/Recibos (PNG, JPG, WEBP) ou Planilhas (XLSX, CSV)
-                      </p>
-                    </div>
-                  )}
-                </label>
-              </div>
+
+                  {/* Thumbnail Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-60 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    {files.map((f, idx) => (
+                      <div
+                        key={idx}
+                        className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-xs flex flex-col items-center"
+                      >
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFiles((prev) => prev.filter((_, i) => i !== idx))
+                          }}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-xs cursor-pointer opacity-90 hover:opacity-100 transition-all z-10"
+                          title="Remover esta foto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Image Thumbnail */}
+                        {f.type.startsWith('image/') ? (
+                          <div className="w-full h-24 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 mb-1.5 flex items-center justify-center">
+                            <img
+                              src={URL.createObjectURL(f)}
+                              alt={f.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-24 rounded-lg bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 mb-1.5">
+                            <FileText className="w-8 h-8 text-emerald-600 mb-1" />
+                            <span className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-300">
+                              {f.name.split('.').pop()}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="w-full text-center px-1">
+                          <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate" title={f.name}>
+                            {f.name.startsWith('print_') ? `Foto / Print #${idx + 1}` : f.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {(f.size / 1024).toFixed(0)} KB
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Add more button */}
+                    <label className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-400 rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer text-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50/20 transition-all min-h-[120px]">
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls,image/*,application/pdf"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        disabled={isExtracting}
+                      />
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5">
+                        <Plus className="w-4 h-4" />
+                      </div>
+                      <span className="text-[11px] font-bold">Colar (Ctrl+V) ou Adicionar</span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {/* Extract CTA */}
               <div className="pt-2 flex justify-end">
                 <button
                   type="button"
                   onClick={handleExtract}
-                  disabled={!file || isExtracting}
+                  disabled={files.length === 0 || isExtracting}
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-xs shadow-emerald-600/30 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 cursor-pointer"
                 >
                   {isExtracting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processando com IA Gemini...</span>
+                      <span>
+                        Processando {files.length} {files.length === 1 ? 'arquivo' : 'imagens'} com IA Gemini...
+                      </span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Analisar e Extrair com IA</span>
+                      <span>
+                        Analisar e Extrair {files.length > 1 ? `(${files.length} Imagens)` : ''} com IA
+                      </span>
                     </>
                   )}
                 </button>

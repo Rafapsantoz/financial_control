@@ -70,6 +70,7 @@ export function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [settlingOwner, setSettlingOwner] = useState<OwnerSummary | null>(null)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [pastedFilesForModal, setPastedFilesForModal] = useState<File[]>([])
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [successBanner, setSuccessBanner] = useState<string | null>(null)
   const [txToDelete, setTxToDelete] = useState<Transaction | null>(null)
@@ -90,6 +91,47 @@ export function App() {
   // Initial load
   useEffect(() => {
     loadMasters()
+  }, [])
+
+  // Global Ctrl + V screenshot listener across dashboard
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if (isInput) return
+
+      const pasted: File[] = []
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          pasted.push(e.clipboardData.files[i])
+        }
+      }
+
+      if (pasted.length === 0 && e.clipboardData?.items) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i]
+          if (item.type.startsWith('image/')) {
+            const blob = item.getAsFile()
+            if (blob) {
+              const ext = blob.type.split('/')[1] || 'png'
+              const now = new Date()
+              const timeStr = `${now.getHours()}h${now.getMinutes()}m${now.getSeconds()}s`
+              const file = new File([blob], `print_${timeStr}_${i + 1}.${ext}`, { type: blob.type })
+              pasted.push(file)
+            }
+          }
+        }
+      }
+
+      if (pasted.length > 0) {
+        e.preventDefault()
+        setPastedFilesForModal(pasted)
+        setIsUploadModalOpen(true)
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
   }, [])
 
   // Load monthly summary & transactions
@@ -381,12 +423,16 @@ export function App() {
 
       <InvoiceUploaderModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={() => {
+          setIsUploadModalOpen(false)
+          setPastedFilesForModal([])
+        }}
         onSuccess={handleInvoiceUploadSuccess}
         owners={owners}
         cards={cards}
         categories={categories}
         currentMonth={currentMonth}
+        initialFiles={pastedFilesForModal}
       />
 
       {/* Modal Customizado de Exclusão de Transação */}

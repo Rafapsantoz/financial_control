@@ -298,49 +298,69 @@ async def extract_invoice_from_pdf(
     card_id: Optional[int] = None,
     mime_type: str = "application/pdf",
     filename: str = "",
+    all_records: Optional[List[Tuple[str, bytes, str]]] = None,
 ) -> ExtractedInvoiceResponse:
     """
     Core AI ingestion pipeline:
-    1. Detects file format (PDF, Image, Excel .xlsx, CSV).
-    2. Sends data to Gemini API for structured multimodal extraction.
+    1. Detects file format(s) (PDF, Images pasted via Ctrl+V, Excel .xlsx, CSV).
+    2. Sends data to Gemini API for structured multimodal extraction (supports multiple images/prints).
     3. Validates and resolves card ID (from parameter or bank/issuer matching).
     4. Loads active owners and categories from SQLite.
     5. Enriches items with installment parsing, heuristic owner assignment, category normalization,
        duplicate detection (RN02), and entry_type (expense vs income).
     6. Calculates invoice consolidated total if missing.
     """
-    text_content = None
-    lower_fn = filename.lower()
+    records_to_process = all_records if all_records else [(filename or "arquivo", pdf_bytes, mime_type)]
 
-    # 1.1 Treat spreadsheets (Excel .xlsx / .xls or CSV)
-    if lower_fn.endswith(".xlsx") or lower_fn.endswith(".xls") or "spreadsheet" in mime_type:
-        try:
-            import openpyxl
-            from io import BytesIO
-            wb = openpyxl.load_workbook(BytesIO(pdf_bytes), data_only=True)
-            sheet_texts = []
-            for sheet in wb.worksheets:
-                sheet_texts.append(f"Aba: {sheet.title}")
-                for row in sheet.iter_rows(values_only=True):
-                    if any(cell is not None for cell in row):
-                        row_str = " | ".join(str(cell).strip() if cell is not None else "" for cell in row)
-                        sheet_texts.append(row_str)
-            text_content = "\n".join(sheet_texts)
-        except Exception as e:
-            logger.warning(f"Falha ao ler Excel com openpyxl: {e}. Tentando como texto...")
-            text_content = pdf_bytes.decode("utf-8", errors="ignore")
-    elif lower_fn.endswith(".csv") or "csv" in mime_type:
-        try:
-            text_content = pdf_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text_content = pdf_bytes.decode("latin-1", errors="replace")
+    text_parts: List[str] = []
+    visual_files: List[Tuple[str, bytes, str]] = []
 
-    # 1.2 Structured extraction via Gemini (Multimodal: PDF, Image or Spreadsheet text)
-    if text_content:
+    for fn, b_data, m_type in records_to_process:
+        lower_fn = fn.lower()
+        if lower_fn.endswith(".xlsx") or lower_fn.endswith(".xls") or "spreadsheet" in m_type:
+            try:
+                import openpyxl
+                from io import BytesIO
+                wb = openpyxl.load_workbook(BytesIO(b_data), data_only=True)
+                for sheet in wb.worksheets:
+                    text_parts.append(f"Aba: {sheet.title} (do arquivo {fn})")
+                    for row in sheet.iter_rows(values_only=True):
+                        if any(cell is not None for cell in row):
+                            row_str = " | ".join(str(cell).strip() if cell is not None else "" for cell in row)
+                            text_parts.append(row_str)
+            except Exception as e:
+                logger.warning(f"Falha ao ler Excel com openpyxl ({fn}): {e}. Tentando como texto...")
+                text_parts.append(b_data.decode("utf-8", errors="ignore"))
+        elif lower_fn.endswith(".csv") or "csv" in m_type:
+            try:
+                text_parts.append(b_data.decode("utf-8"))
+            except UnicodeDecodeError:
+                text_parts.append(b_data.decode("latin-1", errors="replace"))
+        else:
+            visual_files.append((fn, b_data, m_type))
+
+    combined_text = "\n".join(text_parts) if text_parts else None
+
+    # Structured extraction via Gemini
+    if visual_files and len(visual_files) > 1:
         extracted = await call_gemini_structured_extraction(
             pdf_bytes=None,
-            mime_type=mime_type,
-            text_content=text_content,
+            mime_type="image/png",
+            text_content=combined_text,
+            all_files=visual_files,
+        )
+    elif visual_files and len(visual_files) == 1:
+        single_fn, single_bytes, single_mime = visual_files[0]
+        extracted = await call_gemini_structured_extraction(
+            pdf_bytes=single_bytes,
+            mime_type=single_mime,
+            text_content=combined_text,
+        )
+    elif combined_text:
+        extracted = await call_gemini_structured_extraction(
+            pdf_bytes=None,
+            mime_type="text/plain",
+            text_content=combined_text,
         )
     else:
         extracted = await call_gemini_structured_extraction(

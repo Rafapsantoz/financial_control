@@ -267,11 +267,19 @@ export async function deleteCategory(id: number): Promise<{ detail: string }> {
 }
 
 export async function extractInvoiceFromPDF(
-  file: File,
+  fileOrFiles: File | File[],
   cardId?: number | null
 ): Promise<ExtractedInvoiceResponse> {
   const formData = new FormData()
-  formData.append('file', file)
+  if (Array.isArray(fileOrFiles)) {
+    fileOrFiles.forEach((f) => formData.append('files', f))
+    if (fileOrFiles.length > 0) {
+      formData.append('file', fileOrFiles[0])
+    }
+  } else {
+    formData.append('file', fileOrFiles)
+    formData.append('files', fileOrFiles)
+  }
   if (cardId) formData.append('card_id', String(cardId))
 
   const res = await fetch(`${BASE_URL}/invoices/extract`, {
