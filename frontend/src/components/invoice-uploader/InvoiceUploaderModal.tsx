@@ -53,8 +53,10 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0]
-      if (!selected.name.toLowerCase().endsWith('.pdf')) {
-        setErrorMsg('Por favor, selecione um arquivo no formato PDF.')
+      const lower = selected.name.toLowerCase()
+      const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic', '.csv', '.xlsx', '.xls']
+      if (!validExtensions.some((ext) => lower.endsWith(ext))) {
+        setErrorMsg('Por favor, selecione um arquivo suportado (PDF, Foto PNG/JPG ou Planilha XLSX/CSV).')
         return
       }
       setFile(selected)
@@ -65,7 +67,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
 
   const handleExtract = async () => {
     if (!file) {
-      setErrorMsg('Selecione um arquivo PDF de fatura para continuar.')
+      setErrorMsg('Selecione um arquivo (PDF, foto ou planilha) para continuar.')
       return
     }
 
@@ -107,6 +109,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
         return {
           ...it,
           selected: true,
+          entry_type: it.entry_type || 'expense',
           targetOwnerId: matchedOwnerId,
           targetCategoryId: matchedCatId,
         }
@@ -149,7 +152,8 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
           cur_parcs: item.current_installment,
           total_parcs: item.total_installments,
           is_paid: false,
-          comment: `Extraído via PDF (${extractedData?.bank_or_issuer || 'Cartão'})`,
+          entry_type: item.entry_type || 'expense',
+          comment: `Extraído via IA (${extractedData?.bank_or_issuer || 'Cartão'})`,
         })),
       }
 
@@ -181,20 +185,20 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
-                  Extração Inteligente de Fatura PDF
+                  Lançamento Inteligente com IA
                 </h3>
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  Google Gemini Flash AI
+                  Google Gemini Multimodal
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Sobe o PDF da fatura do cartão para leitura automática de compras e rateio familiar
+                Suba fatura em PDF, foto/recibo ou planilha (Excel/CSV) para leitura automática e classificação
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -222,7 +226,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    1. Cartão de Crédito de Destino
+                    1. Cartão de Crédito ou Conta de Destino
                   </label>
                   <select
                     value={selectedCardId || ''}
@@ -241,12 +245,12 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
               {/* Dropzone */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  2. Arquivo PDF da Fatura
+                  2. Arquivo (PDF, Foto ou Planilha)
                 </label>
                 <label className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer bg-slate-50 dark:bg-slate-850 text-center">
                   <input
                     type="file"
-                    accept=".pdf,application/pdf"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
                     className="hidden"
                     onChange={handleFileChange}
                     disabled={isExtracting}
@@ -264,10 +268,10 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   ) : (
                     <div>
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        Clique para selecionar ou arraste o arquivo PDF aqui
+                        Clique para selecionar ou arraste o arquivo aqui
                       </p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                        Formatos suportados: Faturas Nubank, Inter, Itaú, C6, Bradesco em PDF nativo
+                        Formatos aceitos: Faturas em PDF, Fotos/Recibos (PNG, JPG, WEBP) ou Planilhas (XLSX, CSV)
                       </p>
                     </div>
                   )}
@@ -280,7 +284,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   type="button"
                   onClick={handleExtract}
                   disabled={!file || isExtracting}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-xs shadow-emerald-600/30 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-xs shadow-emerald-600/30 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 cursor-pointer"
                 >
                   {isExtracting ? (
                     <>
@@ -290,7 +294,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Analisar e Extrair Fatura</span>
+                      <span>Analisar e Extrair com IA</span>
                     </>
                   )}
                 </button>
@@ -442,6 +446,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                         <th className="py-2.5 px-3">Descrição da Compra</th>
                         <th className="py-2.5 px-3 text-center">Parcelas</th>
                         <th className="py-2.5 px-3 text-right">Valor</th>
+                        <th className="py-2.5 px-3 text-center">Tipo</th>
                         <th className="py-2.5 px-3">Responsável (Heurística)</th>
                         <th className="py-2.5 px-3">Categoria</th>
                       </tr>
@@ -506,6 +511,30 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                           {/* Amount */}
                           <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">
                             {formatCurrency(item.amount)}
+                          </td>
+
+                          {/* Tipo: Despesa vs Receita */}
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditedItems((prev) =>
+                                  prev.map((it, idx) =>
+                                    idx === index
+                                      ? { ...it, entry_type: it.entry_type === 'income' ? 'expense' : 'income' }
+                                      : it
+                                  )
+                                )
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                item.entry_type === 'income'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                                  : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700'
+                              }`}
+                              title="Clique para alternar entre Despesa e Receita"
+                            >
+                              {item.entry_type === 'income' ? '🟢 Receita' : '🔴 Despesa'}
+                            </button>
                           </td>
 
                           {/* Owner Selection */}

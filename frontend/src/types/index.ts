@@ -33,6 +33,7 @@ export interface Transaction {
   total_parcs: number
   is_paid: boolean
   is_forecast: boolean
+  entry_type?: 'expense' | 'income'
   invoice_month?: string | null
   comment?: string | null
   created_at: string
@@ -82,6 +83,7 @@ export interface ExtractedInvoiceItem {
   suggested_owner?: string | null
   owner_id?: number | null
   is_duplicate_suspect?: boolean
+  entry_type?: 'expense' | 'income'
 }
 
 export interface ExtractedInvoiceResponse {
@@ -110,6 +112,7 @@ export interface InvoiceConfirmItem {
   total_parcs?: number
   is_paid?: boolean
   is_forecast?: boolean
+  entry_type?: 'expense' | 'income'
   invoice_month?: string | null
   comment?: string | null
 }

@@ -402,8 +402,21 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     </td>
 
                     {/* Value */}
-                    <td className="py-3 px-4 text-right font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                      {formatCurrency(tx.value)}
+                    <td className="py-3 px-4 text-right font-bold whitespace-nowrap">
+                      {tx.entry_type === 'income' ? (
+                        <div className="flex flex-col items-end">
+                          <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                            + {formatCurrency(tx.value)}
+                          </span>
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            Receita
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-900 dark:text-slate-100">
+                          {formatCurrency(tx.value)}
+                        </span>
+                      )}
                     </td>
 
                     {/* Status Button (Toggle Paid or Define Real for Forecasts) */}

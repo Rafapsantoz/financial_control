@@ -69,6 +69,7 @@ tests/screenshots/*.png
 # IDEs e Sistema
 .vscode/
 .idea/
+scratch/
 *.swp
 *.swo
 Thumbs.db

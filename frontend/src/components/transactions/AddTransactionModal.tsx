@@ -32,6 +32,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [value, setValue] = useState('')
   const [date, setDate] = useState(defaultDate)
   const [invoiceMonth, setInvoiceMonth] = useState<string>(currentMonth)
+  const [entryType, setEntryType] = useState<'expense' | 'income'>('expense')
   const [ownerId, setOwnerId] = useState<number>(owners[0]?.id || 1)
   const [cardId, setCardId] = useState<number | null>(cards[0]?.id || null)
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1)
@@ -79,6 +80,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         total_parcs: totalParcs,
         is_paid: false,
         is_forecast: isForecast,
+        entry_type: entryType,
         comment: comment.trim() || undefined,
       })
       onClose()
@@ -115,6 +117,37 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               {errorMsg}
             </div>
           )}
+
+          {/* Tipo de Lançamento: Despesa vs Receita */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Tipo de Lançamento *
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setEntryType('expense')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  entryType === 'expense'
+                    ? 'bg-rose-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <span>🔴 Despesa (Saída)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryType('income')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  entryType === 'income'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <span>🟢 Receita (Entrada)</span>
+              </button>
+            </div>
+          </div>
 
           {/* Description */}
           <div>

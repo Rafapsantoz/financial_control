@@ -20,6 +20,7 @@ class ExtractedInvoiceItem(BaseModel):
     category_id: Optional[int] = Field(default=None, description="ID da categoria resolvida no banco de dados")
     card_id: Optional[int] = Field(default=None, description="ID do cartão associado")
     is_duplicate: bool = Field(default=False, description="Indica se a transação já foi previamente lançada no sistema (RN02)")
+    entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
 
     @field_validator("amount", mode="after")
     @classmethod
@@ -63,6 +64,7 @@ class InvoiceConfirmItem(BaseModel):
     invoice_month: Optional[str] = Field(default=None, description="Mês da fatura de competência (YYYY-MM)")
     is_paid: bool = Field(default=False, description="Status de quitação da dívida pelo responsável")
     is_forecast: bool = Field(default=False, description="Indica se é parcela projetada para faturas futuras")
+    entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
 
     @field_validator("description", mode="after")
     @classmethod

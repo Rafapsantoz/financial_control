@@ -296,18 +296,57 @@ async def extract_invoice_from_pdf(
     db: AsyncSession,
     pdf_bytes: bytes,
     card_id: Optional[int] = None,
+    mime_type: str = "application/pdf",
+    filename: str = "",
 ) -> ExtractedInvoiceResponse:
     """
     Core AI ingestion pipeline:
-    1. Sends PDF bytes to Gemini API for structured multimodal extraction.
-    2. Validates and resolves card ID (from parameter or bank/issuer matching).
-    3. Loads active owners and categories from SQLite.
-    4. Enriches items with installment parsing, heuristic owner assignment, category normalization,
-       and duplicate detection (RN02).
-    5. Calculates invoice consolidated total if missing.
+    1. Detects file format (PDF, Image, Excel .xlsx, CSV).
+    2. Sends data to Gemini API for structured multimodal extraction.
+    3. Validates and resolves card ID (from parameter or bank/issuer matching).
+    4. Loads active owners and categories from SQLite.
+    5. Enriches items with installment parsing, heuristic owner assignment, category normalization,
+       duplicate detection (RN02), and entry_type (expense vs income).
+    6. Calculates invoice consolidated total if missing.
     """
-    # 1. Structured extraction via Gemini
-    extracted = await call_gemini_structured_extraction(pdf_bytes=pdf_bytes)
+    text_content = None
+    lower_fn = filename.lower()
+
+    # 1.1 Treat spreadsheets (Excel .xlsx / .xls or CSV)
+    if lower_fn.endswith(".xlsx") or lower_fn.endswith(".xls") or "spreadsheet" in mime_type:
+        try:
+            import openpyxl
+            from io import BytesIO
+            wb = openpyxl.load_workbook(BytesIO(pdf_bytes), data_only=True)
+            sheet_texts = []
+            for sheet in wb.worksheets:
+                sheet_texts.append(f"Aba: {sheet.title}")
+                for row in sheet.iter_rows(values_only=True):
+                    if any(cell is not None for cell in row):
+                        row_str = " | ".join(str(cell).strip() if cell is not None else "" for cell in row)
+                        sheet_texts.append(row_str)
+            text_content = "\n".join(sheet_texts)
+        except Exception as e:
+            logger.warning(f"Falha ao ler Excel com openpyxl: {e}. Tentando como texto...")
+            text_content = pdf_bytes.decode("utf-8", errors="ignore")
+    elif lower_fn.endswith(".csv") or "csv" in mime_type:
+        try:
+            text_content = pdf_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text_content = pdf_bytes.decode("latin-1", errors="replace")
+
+    # 1.2 Structured extraction via Gemini (Multimodal: PDF, Image or Spreadsheet text)
+    if text_content:
+        extracted = await call_gemini_structured_extraction(
+            pdf_bytes=None,
+            mime_type=mime_type,
+            text_content=text_content,
+        )
+    else:
+        extracted = await call_gemini_structured_extraction(
+            pdf_bytes=pdf_bytes,
+            mime_type=mime_type,
+        )
 
     # 2. Resolve Card ID
     resolved_card_id = card_id
@@ -480,6 +519,7 @@ async def confirm_invoice_transactions(
             cur_parcs=item.cur_parcs,
             is_paid=item.is_paid,
             is_forecast=item.is_forecast,
+            entry_type=getattr(item, "entry_type", "expense") or "expense",
             invoice_month=eff_invoice_month,
             comment=tx_comment,
         )
@@ -510,6 +550,7 @@ async def confirm_invoice_transactions(
                     cur_parcs=p,
                     is_paid=False,
                     is_forecast=True,
+                    entry_type=getattr(item, "entry_type", "expense") or "expense",
                     invoice_month=future_inv_month,
                     comment=proj_comment,
                 )

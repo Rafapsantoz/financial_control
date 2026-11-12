@@ -20,6 +20,7 @@ class TransactionBase(BaseModel):
     invoice_month: Optional[str] = Field(default=None, description="Mês da fatura em que a conta será paga (YYYY-MM)")
     is_paid: bool = Field(default=False, description="Status de quitação da dívida pelo responsável")
     is_forecast: bool = Field(default=False, description="Indica se é parcela projetada para faturas futuras")
+    entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
 
     @field_validator("description", mode="after")
     @classmethod
@@ -60,6 +61,7 @@ class TransactionUpdate(BaseModel):
     invoice_month: Optional[str] = None
     is_paid: Optional[bool] = None
     is_forecast: Optional[bool] = None
+    entry_type: Optional[str] = None
 
     @field_validator("description", mode="after")
     @classmethod

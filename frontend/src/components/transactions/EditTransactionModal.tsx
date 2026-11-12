@@ -55,6 +55,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [totalParcs, setTotalParcs] = useState<number>(transaction.total_parcs || 1)
   const [isPaid, setIsPaid] = useState<boolean>(transaction.is_paid || false)
   const [isForecast, setIsForecast] = useState<boolean>(transaction.is_forecast || false)
+  const [entryType, setEntryType] = useState<'expense' | 'income'>(
+    (transaction.entry_type as 'expense' | 'income') || 'expense'
+  )
   const [comment, setComment] = useState(transaction.comment || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -88,6 +91,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setTotalParcs(transaction.total_parcs || 1)
       setIsPaid(transaction.is_paid || false)
       setIsForecast(transaction.is_forecast || false)
+      setEntryType((transaction.entry_type as 'expense' | 'income') || 'expense')
       setComment(transaction.comment || '')
       setErrorMsg('')
       setSuccessBanner('')
@@ -194,6 +198,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         total_parcs: totalParcs,
         is_paid: isPaid,
         is_forecast: isForecast,
+        entry_type: entryType,
         comment: comment.trim() || undefined,
       })
       onClose()
@@ -246,10 +251,41 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             </div>
           )}
 
+          {/* Tipo de Lançamento: Despesa vs Receita */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Tipo de Lançamento *
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setEntryType('expense')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  entryType === 'expense'
+                    ? 'bg-rose-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <span>🔴 Despesa (Saída)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryType('income')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  entryType === 'income'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <span>🟢 Receita (Entrada)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Descrição */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Descrição do Gasto *
+              Descrição do Lançamento *
             </label>
             <input
               type="text"

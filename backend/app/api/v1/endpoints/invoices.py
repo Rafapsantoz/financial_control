@@ -42,17 +42,20 @@ async def extract_invoice(
     """
     effective_card_id = card_id_form if card_id_form is not None else card_id
 
-    # 1. Validate content type and filename extension
+    # 1. Validate content type and filename extension (PDF, Images, Spreadsheets)
     filename = file.filename or ""
     content_type = file.content_type or ""
+    lower_fn = filename.lower()
+    lower_ct = content_type.lower()
 
-    is_pdf_content_type = "pdf" in content_type.lower()
-    is_pdf_extension = filename.lower().endswith(".pdf")
+    is_pdf = lower_fn.endswith(".pdf") or "pdf" in lower_ct
+    is_img = any(lower_fn.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".heic"]) or "image" in lower_ct
+    is_sheet = any(lower_fn.endswith(ext) for ext in [".xlsx", ".xls", ".csv"]) or "sheet" in lower_ct or "csv" in lower_ct
 
-    if not is_pdf_content_type and not is_pdf_extension:
+    if not (is_pdf or is_img or is_sheet):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apenas arquivos no formato PDF são aceitos para extração.",
+            detail="Apenas arquivos no formato PDF são aceitos para extração (ou imagens PNG/JPG/WEBP e planilhas XLSX/CSV).",
         )
 
     # 2. Read bytes into memory
@@ -60,15 +63,32 @@ async def extract_invoice(
     if not pdf_bytes or len(pdf_bytes) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O arquivo PDF enviado está vazio (0 bytes).",
+            detail="O arquivo enviado está vazio (0 bytes).",
         )
 
-    # 3. Validate PDF magic number
-    if not pdf_bytes.startswith(b"%PDF-"):
+    # 3. Validate PDF magic number if it is a PDF file
+    if is_pdf and not pdf_bytes.startswith(b"%PDF-"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Arquivo inválido ou corrompido: cabeçalho PDF (%PDF-) não identificado.",
         )
+
+    if is_pdf:
+        effective_mime_type = "application/pdf"
+    elif lower_fn.endswith(".png"):
+        effective_mime_type = "image/png"
+    elif lower_fn.endswith(".jpg") or lower_fn.endswith(".jpeg"):
+        effective_mime_type = "image/jpeg"
+    elif lower_fn.endswith(".webp"):
+        effective_mime_type = "image/webp"
+    elif lower_fn.endswith(".csv"):
+        effective_mime_type = "text/csv"
+    elif lower_fn.endswith(".xlsx"):
+        effective_mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif lower_fn.endswith(".xls"):
+        effective_mime_type = "application/vnd.ms-excel"
+    else:
+        effective_mime_type = content_type or "application/pdf"
 
     # 4. Validate card existence if provided
     if effective_card_id is not None:
@@ -87,6 +107,8 @@ async def extract_invoice(
         db=db,
         pdf_bytes=pdf_bytes,
         card_id=effective_card_id,
+        mime_type=effective_mime_type,
+        filename=filename,
     )
     extracted_data.file_hash = file_hash
 

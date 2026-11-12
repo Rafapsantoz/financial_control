@@ -50,6 +50,7 @@ class Transaction(Base):
     # Status & Billing cycle flags
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0", index=True)
     is_forecast: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0", index=True)
+    entry_type: Mapped[str] = mapped_column(String(20), nullable=False, default="expense", server_default="expense", index=True)
     invoice_month: Mapped[Optional[str]] = mapped_column(String(7), nullable=True, index=True)
     comment: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 

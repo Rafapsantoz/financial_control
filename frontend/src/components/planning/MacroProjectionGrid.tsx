@@ -316,7 +316,23 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap table-fixed">
+          <table className="w-[1490px] min-w-[1490px] text-left text-xs whitespace-nowrap table-fixed">
+            <colgroup>
+              <col style={{ width: '240px', minWidth: '240px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '95px', minWidth: '95px' }} />
+              <col style={{ width: '110px', minWidth: '110px' }} />
+            </colgroup>
             <thead>
               <tr className="bg-slate-100/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
                 <th className="py-3 px-4 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 shadow-xs w-[240px] min-w-[240px] max-w-[240px]">
@@ -339,7 +355,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                 <>
                   {/* SEÇÃO 1: CUSTOS FIXOS */}
                   <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400">
-                    <td colSpan={14} className="py-1.5 px-4 sticky left-0">
+                    <td colSpan={14} className="py-1.5 px-4 font-bold text-slate-400 dark:text-slate-500">
                       📌 Custos Fixos & Recorrentes
                     </td>
                   </tr>
@@ -373,7 +389,7 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
 
                   {/* SEÇÃO 2: CARTÕES DE CRÉDITO */}
                   <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400">
-                    <td colSpan={14} className="py-1.5 px-4 sticky left-0">
+                    <td colSpan={14} className="py-1.5 px-4 font-bold text-slate-400 dark:text-slate-500">
                       💳 Faturas de Cartão de Crédito
                     </td>
                   </tr>
