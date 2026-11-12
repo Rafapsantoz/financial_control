@@ -323,16 +323,40 @@ export const MobileCompanion: React.FC<MobileCompanionProps> = ({
                 </span>
               </div>
 
-              {/* Saldo Líquido Livre */}
+              {/* Saldo Líquido ou Total de Gastos */}
               <div className="my-2">
-                <span className="text-xs text-slate-400 block font-medium">Saldo Livre Previsto</span>
-                <div
-                  className={`text-3xl font-black font-mono tracking-tight ${
-                    myNetBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {formatCurrency(myNetBalance)}
-                </div>
+                {myTotalIncome > 0 ? (
+                  <>
+                    <span className="text-xs text-slate-400 block font-medium">
+                      {myNetBalance >= 0 ? 'Saldo Livre Disponível' : 'Déficit no Mês'}
+                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={`text-3xl font-black font-mono tracking-tight ${
+                          myNetBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {myNetBalance >= 0
+                          ? `+ ${formatCurrency(myNetBalance)}`
+                          : formatCurrency(Math.abs(myNetBalance))}
+                      </span>
+                      {myNetBalance < 0 && (
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          Acima da Renda
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-indigo-200/80 block font-medium">
+                      Total de Gastos no Mês
+                    </span>
+                    <div className="text-3xl font-black font-mono tracking-tight text-white">
+                      {formatCurrency(myTotalExpenses)}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Entradas vs Saídas */}
@@ -544,7 +568,7 @@ export const MobileCompanion: React.FC<MobileCompanionProps> = ({
                                 : 'text-slate-900 dark:text-slate-100'
                             }`}
                           >
-                            {isIncome ? '+' : '-'} {formatCurrency(tx.value)}
+                            {isIncome ? `+ ${formatCurrency(tx.value)}` : formatCurrency(tx.value)}
                           </span>
                           <button
                             onClick={() => onTogglePaid(tx.id)}
@@ -669,7 +693,7 @@ export const MobileCompanion: React.FC<MobileCompanionProps> = ({
                                       : 'text-slate-900 dark:text-slate-100'
                                   }`}
                                 >
-                                  {isIncome ? '+' : '-'} {formatCurrency(tx.value)}
+                                  {isIncome ? `+ ${formatCurrency(tx.value)}` : formatCurrency(tx.value)}
                                 </span>
                                 <button
                                   onClick={() => onTogglePaid(tx.id)}
