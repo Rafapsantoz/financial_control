@@ -53,6 +53,7 @@ import {
   updateOwner,
 } from '../../lib/api'
 import { formatCurrency, formatDate, formatMonthName } from '../../lib/formatters'
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal'
 
 interface AdminPanelProps {
   owners: Owner[]
@@ -70,9 +71,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'bank_accounts' | 'uploads'>('owners')
   const [invoiceUploads, setInvoiceUploads] = useState<InvoiceUpload[]>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
+
+  // Unified Delete Modals State
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false)
+  const [deleteCategoryError, setDeleteCategoryError] = useState<string | null>(null)
+
+  const [ownerToDelete, setOwnerToDelete] = useState<Owner | null>(null)
+  const [isDeletingOwner, setIsDeletingOwner] = useState(false)
+  const [deleteOwnerError, setDeleteOwnerError] = useState<string | null>(null)
+
+  const [cardToDelete, setCardToDelete] = useState<Card | null>(null)
+  const [isDeletingCard, setIsDeletingCard] = useState(false)
+  const [deleteCardError, setDeleteCardError] = useState<string | null>(null)
+
+  const [bankToDelete, setBankToDelete] = useState<BankAccount | null>(null)
+  const [isDeletingBank, setIsDeletingBank] = useState(false)
+  const [deleteBankError, setDeleteBankError] = useState<string | null>(null)
+
   const [uploadToDelete, setUploadToDelete] = useState<InvoiceUpload | null>(null)
   const [deleteTransactionsWithUpload, setDeleteTransactionsWithUpload] = useState<boolean>(true)
   const [isDeletingUpload, setIsDeletingUpload] = useState<boolean>(false)
+  const [deleteUploadError, setDeleteUploadError] = useState<string | null>(null)
 
   // Bank Accounts & CDI Yield State
   const [bankSummary, setBankSummary] = useState<BankAccountsSummary | null>(null)
@@ -106,6 +126,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!uploadToDelete) return
     try {
       setIsDeletingUpload(true)
+      setDeleteUploadError(null)
       clearFeedback()
       const res = await deleteInvoiceUpload(uploadToDelete.id, deleteTransactionsWithUpload)
       setSuccessMsg(
@@ -115,7 +136,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       await loadUploadsHistory()
       await onRefreshMasters()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao excluir registro de fatura.')
+      setDeleteUploadError(err.message || 'Erro ao excluir registro de fatura.')
     } finally {
       setIsDeletingUpload(false)
     }
@@ -221,18 +242,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
-  const handleDeleteOwner = async (owner: Owner) => {
-    if (!window.confirm(`Deseja realmente remover o responsável "${owner.name}"?`)) return
+  const handleConfirmDeleteOwner = async () => {
+    if (!ownerToDelete) return
     try {
-      setLoadingAction(true)
+      setIsDeletingOwner(true)
+      setDeleteOwnerError(null)
       clearFeedback()
-      await deleteOwner(owner.id)
-      setSuccessMsg(`Proprietário "${owner.name}" removido com sucesso.`)
+      await deleteOwner(ownerToDelete.id)
+      setSuccessMsg(`Participante "${ownerToDelete.name}" removido com sucesso.`)
+      setOwnerToDelete(null)
       await onRefreshMasters()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Não foi possível excluir o proprietário.')
+      setDeleteOwnerError(err.message || 'Não foi possível excluir o participante.')
     } finally {
-      setLoadingAction(false)
+      setIsDeletingOwner(false)
     }
   }
 
@@ -301,18 +324,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
-  const handleDeleteCard = async (card: Card) => {
-    if (!window.confirm(`Deseja realmente remover o cartão "${card.card_name}"?`)) return
+  const handleConfirmDeleteCard = async () => {
+    if (!cardToDelete) return
     try {
-      setLoadingAction(true)
+      setIsDeletingCard(true)
+      setDeleteCardError(null)
       clearFeedback()
-      await deleteCard(card.id)
-      setSuccessMsg(`Cartão "${card.card_name}" removido com sucesso.`)
+      await deleteCard(cardToDelete.id)
+      setSuccessMsg(`Cartão "${cardToDelete.card_name}" removido com sucesso.`)
+      setCardToDelete(null)
       await onRefreshMasters()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Não foi possível excluir o cartão.')
+      setDeleteCardError(err.message || 'Não foi possível excluir o cartão.')
     } finally {
-      setLoadingAction(false)
+      setIsDeletingCard(false)
     }
   }
 
@@ -367,18 +392,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
-  const handleDeleteCategory = async (cat: Category) => {
-    if (!window.confirm(`Deseja realmente remover a categoria "${cat.description}"?`)) return
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return
     try {
-      setLoadingAction(true)
+      setIsDeletingCategory(true)
+      setDeleteCategoryError(null)
       clearFeedback()
-      await deleteCategory(cat.id)
-      setSuccessMsg(`Categoria "${cat.description}" removida com sucesso.`)
+      await deleteCategory(categoryToDelete.id)
+      setSuccessMsg(`Categoria "${categoryToDelete.description}" removida com sucesso.`)
+      setCategoryToDelete(null)
       await onRefreshMasters()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Não foi possível excluir a categoria.')
+      setDeleteCategoryError(err.message || 'Não foi possível excluir a categoria.')
     } finally {
-      setLoadingAction(false)
+      setIsDeletingCategory(false)
     }
   }
 
@@ -445,19 +472,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
-  const handleDeleteBankAccount = async (bank: BankAccount) => {
-    if (!window.confirm(`Deseja realmente remover a conta bancária "${bank.name}"? Todos os saldos vinculados a ela serão excluídos.`)) return
+  const handleConfirmDeleteBankAccount = async () => {
+    if (!bankToDelete) return
     try {
-      setLoadingAction(true)
+      setIsDeletingBank(true)
+      setDeleteBankError(null)
       clearFeedback()
-      await deleteBankAccount(bank.id)
-      setSuccessMsg(`Conta bancária "${bank.name}" removida com sucesso.`)
+      await deleteBankAccount(bankToDelete.id)
+      setSuccessMsg(`Conta bancária "${bankToDelete.name}" removida com sucesso.`)
+      setBankToDelete(null)
       await loadBankSummary()
       await onRefreshMasters()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Não foi possível excluir a conta bancária.')
+      setDeleteBankError(err.message || 'Não foi possível excluir a conta bancária.')
     } finally {
-      setLoadingAction(false)
+      setIsDeletingBank(false)
     }
   }
 
@@ -722,8 +751,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDeleteOwner(owner)}
-                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                        onClick={() => {
+                          setOwnerToDelete(owner)
+                          setDeleteOwnerError(null)
+                        }}
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                         title="Remover participante"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -799,8 +831,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDeleteCard(card)}
-                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                        onClick={() => {
+                          setCardToDelete(card)
+                          setDeleteCardError(null)
+                        }}
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                         title="Remover cartão"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -909,7 +944,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteCategory(cat)}
+                            onClick={() => {
+                              setCategoryToDelete(cat)
+                              setDeleteCategoryError(null)
+                            }}
                             className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                             title="Remover categoria"
                           >
@@ -1138,7 +1176,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteBankAccount(acc)}
+                            onClick={() => {
+                              setBankToDelete(acc)
+                              setDeleteBankError(null)
+                            }}
                             className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                             title="Excluir conta bancária"
                           >
@@ -1276,6 +1317,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             onClick={() => {
                               setUploadToDelete(up)
                               setDeleteTransactionsWithUpload(true)
+                              setDeleteUploadError(null)
                             }}
                             className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                             title="Excluir fatura para permitir reimportação limpa"
@@ -1791,83 +1833,214 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* MODAL 6: DELETE INVOICE UPLOAD & ALLOW RE-IMPORT */}
-      {uploadToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 pb-4 flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
-                  Excluir Fatura e Liberar Reimportação?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Esta ação removerá a blindagem de hash SHA-256 permitindo que este arquivo seja reimportado novamente.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setUploadToDelete(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+      {/* UNIFIED DELETE MODAL: CATEGORY */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(categoryToDelete)}
+        title="Excluir Categoria?"
+        subtitle="Esta ação removerá a categoria do catálogo de lançamentos e orçamentos."
+        warningText="Se houver transações vinculadas a esta categoria, a exclusão será impedida pelo banco de dados para proteger seu histórico."
+        confirmButtonText="Sim, Excluir Categoria"
+        isDeleting={isDeletingCategory}
+        errorMsg={deleteCategoryError}
+        onClose={() => {
+          setCategoryToDelete(null)
+          setDeleteCategoryError(null)
+        }}
+        onConfirm={handleConfirmDeleteCategory}
+      >
+        {categoryToDelete && (
+          <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                {categoryToDelete.description}
+              </h4>
+              <span
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                  (categoryToDelete.fixed_cost || 0) > 0
+                    ? 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
               >
-                <X className="w-4 h-4" />
-              </button>
+                {(categoryToDelete.fixed_cost || 0) > 0 ? 'Custo Fixo Recorrente' : 'Despesa Variável'}
+              </span>
             </div>
-
-            <div className="px-6 py-3 space-y-3">
-              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100">
-                  <span className="truncate max-w-[240px]">{uploadToDelete.filename}</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(uploadToDelete.total_amount)}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span>Mês: <b>{formatMonthName(uploadToDelete.target_month)}</b></span>
-                  <span>Compras: <b>{uploadToDelete.items_count}</b></span>
-                </div>
+            {(categoryToDelete.fixed_cost || 0) > 0 ? (
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span>Custo Fixo Mensal:</span>
+                <b className="text-indigo-700 dark:text-indigo-300 font-mono text-sm">
+                  {formatCurrency(categoryToDelete.fixed_cost || 0)} / mês
+                </b>
               </div>
+            ) : (
+              <div className="text-xs text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                Nenhum valor fixo recorrente vinculado.
+              </div>
+            )}
+          </div>
+        )}
+      </ConfirmDeleteModal>
 
-              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={deleteTransactionsWithUpload}
-                  onChange={(e) => setDeleteTransactionsWithUpload(e.target.checked)}
-                  className="rounded text-amber-600 focus:ring-amber-500 mt-0.5"
-                />
-                <div className="text-xs text-amber-900 dark:text-amber-200">
-                  <span className="font-bold block">Excluir também as transações geradas no mês</span>
-                  <span className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
-                    Recomendado: limpa os lançamentos desse cartão no mês de {formatMonthName(uploadToDelete.target_month)} para evitar títulos duplicados ao reimportar.
-                  </span>
-                </div>
-              </label>
+      {/* UNIFIED DELETE MODAL: OWNER */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(ownerToDelete)}
+        title="Excluir Participante / Dono?"
+        subtitle="Esta ação removerá o participante do rateio familiar e das despesas."
+        warningText="Se existirem transações vinculadas a este participante, a exclusão será bloqueada para manter a integridade dos saldos."
+        confirmButtonText="Sim, Excluir Participante"
+        isDeleting={isDeletingOwner}
+        errorMsg={deleteOwnerError}
+        onClose={() => {
+          setOwnerToDelete(null)
+          setDeleteOwnerError(null)
+        }}
+        onConfirm={handleConfirmDeleteOwner}
+      >
+        {ownerToDelete && (
+          <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                {ownerToDelete.name}
+              </h4>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                {ownerToDelete.category || 'Familiar'}
+              </span>
             </div>
+            {ownerToDelete.phone_number ? (
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span>Telefone / WhatsApp:</span>
+                <b className="text-slate-700 dark:text-slate-300">{ownerToDelete.phone_number}</b>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                Sem telefone cadastrado.
+              </div>
+            )}
+          </div>
+        )}
+      </ConfirmDeleteModal>
 
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setUploadToDelete(null)}
-                disabled={isDeletingUpload}
-                className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteUpload}
-                disabled={isDeletingUpload}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isDeletingUpload ? 'Excluindo...' : 'Excluir e Permitir Reimportação'}</span>
-              </button>
+      {/* UNIFIED DELETE MODAL: CARD */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(cardToDelete)}
+        title="Excluir Cartão de Crédito?"
+        subtitle="Esta ação removerá o cartão e seus parâmetros de faturamento do sistema."
+        warningText="Se houver compras ou faturas registradas neste cartão, a exclusão será bloqueada pelo banco de dados."
+        confirmButtonText="Sim, Excluir Cartão"
+        isDeleting={isDeletingCard}
+        errorMsg={deleteCardError}
+        onClose={() => {
+          setCardToDelete(null)
+          setDeleteCardError(null)
+        }}
+        onConfirm={handleConfirmDeleteCard}
+      >
+        {cardToDelete && (
+          <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                {cardToDelete.card_name}
+              </h4>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                Vencimento Dia {cardToDelete.due_day || '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+              <span>Limite Total Cadastrado:</span>
+              <b className="text-slate-800 dark:text-slate-200 font-mono">
+                {cardToDelete.total_limit ? formatCurrency(cardToDelete.total_limit) : 'R$ 0,00'}
+              </b>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ConfirmDeleteModal>
+
+      {/* UNIFIED DELETE MODAL: BANK ACCOUNT */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(bankToDelete)}
+        title="Excluir Conta Bancária?"
+        subtitle="Esta ação removerá a conta e todos os saldos e rendimentos vinculados."
+        warningText="Todos os saldos cadastrados e o cálculo de rendimentos CDI atrelados a esta conta serão removidos permanentemente."
+        confirmButtonText="Sim, Excluir Conta Bancária"
+        isDeleting={isDeletingBank}
+        errorMsg={deleteBankError}
+        onClose={() => {
+          setBankToDelete(null)
+          setDeleteBankError(null)
+        }}
+        onConfirm={handleConfirmDeleteBankAccount}
+      >
+        {bankToDelete && (
+          <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                {bankToDelete.name}
+              </h4>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                {bankToDelete.cdi_rate}% CDI
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+              <span>Tipo da Conta:</span>
+              <b className="text-slate-700 dark:text-slate-300">{bankToDelete.account_type || 'Conta Pagamento'}</b>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              <span>Saldo Total na Conta:</span>
+              <b className="text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                {formatCurrency(bankToDelete.balances?.reduce((sum, b) => sum + b.balance, 0) || 0)}
+              </b>
+            </div>
+          </div>
+        )}
+      </ConfirmDeleteModal>
+
+      {/* UNIFIED DELETE MODAL: INVOICE UPLOAD & ALLOW RE-IMPORT */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(uploadToDelete)}
+        title="Excluir Fatura e Liberar Reimportação?"
+        subtitle="Esta ação removerá a blindagem de hash SHA-256 permitindo que este arquivo seja reimportado novamente."
+        confirmButtonText="Sim, Excluir e Liberar"
+        isDeleting={isDeletingUpload}
+        errorMsg={deleteUploadError}
+        onClose={() => {
+          setUploadToDelete(null)
+          setDeleteUploadError(null)
+        }}
+        onConfirm={handleConfirmDeleteUpload}
+      >
+        {uploadToDelete && (
+          <div className="space-y-3">
+            <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate max-w-[240px]">
+                  {uploadToDelete.filename}
+                </span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm shrink-0">
+                  {formatCurrency(uploadToDelete.total_amount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span>Mês: <b className="text-slate-700 dark:text-slate-300">{formatMonthName(uploadToDelete.target_month)}</b></span>
+                <span>Compras: <b className="text-slate-700 dark:text-slate-300">{uploadToDelete.items_count}</b></span>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteTransactionsWithUpload}
+                onChange={(e) => setDeleteTransactionsWithUpload(e.target.checked)}
+                className="rounded text-amber-600 focus:ring-amber-500 mt-0.5 cursor-pointer"
+              />
+              <div className="text-xs text-amber-900 dark:text-amber-200">
+                <span className="font-bold block">Excluir também as transações geradas no mês</span>
+                <span className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed block mt-0.5">
+                  Recomendado: limpa os lançamentos desse cartão no mês de {formatMonthName(uploadToDelete.target_month)} para evitar títulos duplicados ao reimportar.
+                </span>
+              </div>
+            </label>
+          </div>
+        )}
+      </ConfirmDeleteModal>
     </div>
   )
 }

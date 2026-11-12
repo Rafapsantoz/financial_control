@@ -11,6 +11,7 @@ import { InvoiceUploaderModal } from './components/invoice-uploader/InvoiceUploa
 import { AdminPanel } from './components/admin/AdminPanel'
 import { MacroProjectionGrid } from './components/planning/MacroProjectionGrid'
 import { BudgetAnalysisTab } from './components/planning/BudgetAnalysisTab'
+import { ConfirmDeleteModal } from './components/common/ConfirmDeleteModal'
 import { formatCurrency, formatDate, formatMonthName } from './lib/formatters'
 import {
   createTransaction,
@@ -435,83 +436,39 @@ export function App() {
         initialFiles={pastedFilesForModal}
       />
 
-      {/* Modal Customizado de Exclusão de Transação */}
-      {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="p-6 pb-4 flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
-                  Excluir Transação da Fatura?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Esta ação removerá este lançamento do rateio familiar e recalculará os totais.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTxToDelete(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {/* MODAL 5: CONFIRM DELETE TRANSACTION */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(txToDelete)}
+        title="Excluir Transação da Fatura?"
+        subtitle="Esta ação removerá este lançamento do rateio familiar e recalculará os totais."
+        warningText="O valor será subtraído da fatura deste mês."
+        confirmButtonText="Sim, Excluir Transação"
+        isDeleting={isDeletingTx}
+        onClose={() => setTxToDelete(null)}
+        onConfirm={handleConfirmDeleteTransaction}
+      >
+        {txToDelete && (
+          <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                {txToDelete.description}
+              </h4>
+              <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 shrink-0">
+                {formatCurrency(txToDelete.value)}
+              </span>
             </div>
-
-            {/* Details Preview */}
-            <div className="px-6 py-3">
-              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
-                    {txToDelete.description}
-                  </h4>
-                  <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 shrink-0">
-                    {formatCurrency(txToDelete.value)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span>Data: <b className="text-slate-700 dark:text-slate-300">{formatDate(txToDelete.dt_lcto)}</b></span>
-                  <span>Parcela: <b className="text-slate-700 dark:text-slate-300">{txToDelete.cur_parcs}/{txToDelete.total_parcs}</b></span>
-                </div>
-                {txToDelete.comment && (
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate">
-                    "{txToDelete.comment}"
-                  </p>
-                )}
-              </div>
-
-              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-3 flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                O valor será subtraído da fatura deste mês.
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              <span>Data: <b className="text-slate-700 dark:text-slate-300">{formatDate(txToDelete.dt_lcto)}</b></span>
+              <span>Parcela: <b className="text-slate-700 dark:text-slate-300">{txToDelete.cur_parcs}/{txToDelete.total_parcs}</b></span>
+            </div>
+            {txToDelete.comment && (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate">
+                "{txToDelete.comment}"
               </p>
-            </div>
-
-            {/* Actions */}
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setTxToDelete(null)}
-                disabled={isDeletingTx}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-xl transition-all cursor-pointer disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteTransaction}
-                disabled={isDeletingTx}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-xl shadow-xs shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {isDeletingTx ? 'Excluindo...' : 'Sim, Excluir Transação'}
-              </button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </ConfirmDeleteModal>
     </div>
   )
 }
