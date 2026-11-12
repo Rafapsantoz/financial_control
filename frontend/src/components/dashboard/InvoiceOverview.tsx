@@ -20,6 +20,10 @@ interface InvoiceOverviewProps {
   totalPending: number
   categoriesSummary: CategorySummary[]
   cardName?: string
+  statusFilter?: 'all' | 'pending' | 'paid'
+  onStatusFilterChange?: (status: 'all' | 'pending' | 'paid') => void
+  forecastFilter?: 'all' | 'effective' | 'forecast'
+  onForecastFilterChange?: (forecast: 'all' | 'effective' | 'forecast') => void
 }
 
 export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
@@ -31,6 +35,10 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
   totalPending,
   categoriesSummary,
   cardName = 'Nubank Principal',
+  statusFilter = 'all',
+  onStatusFilterChange,
+  forecastFilter = 'all',
+  onForecastFilterChange,
 }) => {
   const effective = totalEffective ?? totalAmount
   const forecast = totalForecast ?? 0
@@ -110,14 +118,26 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
                     {formatCurrency(effective)}
                   </span>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold block">
+                <button
+                  type="button"
+                  onClick={() => onForecastFilterChange?.(forecastFilter === 'forecast' ? 'all' : 'forecast')}
+                  title="Clique para filtrar apenas os gastos previstos / estimativas"
+                  className={`text-right p-1.5 rounded-lg transition-all cursor-pointer ${
+                    forecastFilter === 'forecast'
+                      ? 'bg-amber-400/20 ring-1 ring-amber-300'
+                      : 'hover:bg-white/5'
+                  }`}
+                >
+                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold block flex items-center justify-end gap-1">
                     Previsto / Estimado
+                    {forecastFilter === 'forecast' && (
+                      <span className="text-[9px] bg-amber-400 text-slate-900 px-1 rounded font-bold">Ativo</span>
+                    )}
                   </span>
                   <span className="text-base font-bold text-amber-300">
                     {formatCurrency(forecast)}
                   </span>
-                </div>
+                </button>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 {forecast > 0
@@ -137,22 +157,51 @@ export const InvoiceOverview: React.FC<InvoiceOverviewProps> = ({
             />
           </div>
 
-          {/* Subtotals */}
+          {/* Subtotals with Click-to-Filter */}
           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-700/60 text-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="w-3 h-3 rounded-full bg-emerald-400" />
+            <button
+              type="button"
+              onClick={() => onStatusFilterChange?.(statusFilter === 'paid' ? 'all' : 'paid')}
+              title="Clique para filtrar todos os lançamentos quitados deste mês"
+              className={`flex items-center gap-2.5 p-2 rounded-xl transition-all text-left cursor-pointer ${
+                statusFilter === 'paid'
+                  ? 'bg-emerald-500/20 ring-1 ring-emerald-400'
+                  : 'hover:bg-white/5'
+              }`}
+            >
+              <div className="w-3 h-3 rounded-full bg-emerald-400 shrink-0" />
               <div>
-                <p className="text-xs text-slate-400">Total Quitado</p>
+                <p className="text-xs text-slate-400 flex items-center gap-1">
+                  Total Quitado
+                  {statusFilter === 'paid' && (
+                    <span className="text-[10px] text-emerald-300 font-bold">(Ativo ✓)</span>
+                  )}
+                </p>
                 <p className="font-bold text-emerald-300">{formatCurrency(totalPaid)}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-3 h-3 rounded-full bg-rose-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onStatusFilterChange?.(statusFilter === 'pending' ? 'all' : 'pending')}
+              title="Clique para filtrar todos os lançamentos pendentes deste mês"
+              className={`flex items-center gap-2.5 p-2 rounded-xl transition-all text-left cursor-pointer ${
+                statusFilter === 'pending'
+                  ? 'bg-rose-500/20 ring-1 ring-rose-400'
+                  : 'hover:bg-white/5'
+              }`}
+            >
+              <div className="w-3 h-3 rounded-full bg-rose-400 shrink-0" />
               <div>
-                <p className="text-xs text-slate-400">Total Pendente</p>
+                <p className="text-xs text-slate-400 flex items-center gap-1">
+                  Total Pendente
+                  {statusFilter === 'pending' && (
+                    <span className="text-[10px] text-rose-300 font-bold">(Ativo ✓)</span>
+                  )}
+                </p>
                 <p className="font-bold text-rose-300">{formatCurrency(totalPending)}</p>
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </div>

@@ -30,6 +30,8 @@ export function App() {
     return localStorage.getItem('fo_current_month') || '2026-11'
   })
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
+  const [forecastFilter, setForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
   const [currentView, setCurrentView] = useState<'dashboard' | 'macro' | 'budget' | 'admin'>('dashboard')
 
   useEffect(() => {
@@ -241,12 +243,16 @@ export function App() {
                     Divisão individual dos gastos entre os membros cadastrados (RN03)
                   </p>
                 </div>
-                {selectedOwnerId !== null && (
+                {(selectedOwnerId !== null || statusFilter !== 'all' || forecastFilter !== 'all') && (
                   <button
-                    onClick={() => setSelectedOwnerId(null)}
+                    onClick={() => {
+                      setSelectedOwnerId(null)
+                      setStatusFilter('all')
+                      setForecastFilter('all')
+                    }}
                     className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer"
                   >
-                    Limpar filtro do membro
+                    Limpar todos os filtros ✕
                   </button>
                 )}
               </div>
@@ -255,6 +261,10 @@ export function App() {
                 ownersSummary={summary?.owners_summary || []}
                 selectedOwnerId={selectedOwnerId}
                 onSelectOwner={setSelectedOwnerId}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                forecastFilter={forecastFilter}
+                onForecastFilterChange={setForecastFilter}
                 onOpenSettleModal={(o) => setSettlingOwner(o)}
               />
             </section>
@@ -270,6 +280,10 @@ export function App() {
                 totalPending={summary?.total_pending || 0}
                 categoriesSummary={summary?.category_summary || []}
                 cardName={displayedCardName}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                forecastFilter={forecastFilter}
+                onForecastFilterChange={setForecastFilter}
               />
             </section>
 
@@ -283,6 +297,10 @@ export function App() {
                 currentMonth={currentMonth}
                 selectedOwnerId={selectedOwnerId}
                 onSelectOwner={setSelectedOwnerId}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                forecastFilter={forecastFilter}
+                onForecastFilterChange={setForecastFilter}
                 onTogglePaid={handleTogglePaid}
                 onDeleteTransaction={handleDeleteTransaction}
                 onEditTransaction={(tx) => setEditingTransaction(tx)}

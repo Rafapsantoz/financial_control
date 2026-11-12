@@ -17,6 +17,10 @@ interface FamilyCardsProps {
   ownersSummary: OwnerSummary[]
   selectedOwnerId: number | null
   onSelectOwner: (ownerId: number | null) => void
+  statusFilter?: 'all' | 'pending' | 'paid'
+  onStatusFilterChange?: (status: 'all' | 'pending' | 'paid') => void
+  forecastFilter?: 'all' | 'effective' | 'forecast'
+  onForecastFilterChange?: (forecast: 'all' | 'effective' | 'forecast') => void
   onOpenSettleModal?: (owner: OwnerSummary) => void
 }
 
@@ -24,6 +28,10 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
   ownersSummary,
   selectedOwnerId,
   onSelectOwner,
+  statusFilter = 'all',
+  onStatusFilterChange,
+  forecastFilter = 'all',
+  onForecastFilterChange,
   onOpenSettleModal,
 }) => {
   const getOwnerConfig = (name: string) => {
@@ -182,10 +190,45 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
               </div>
 
               {/* Forecast indicator if member has estimated expenses */}
+              {/* Forecast indicator if member has estimated expenses */}
               {owner.forecast_amount && owner.forecast_amount > 0 ? (
-                <div className="mt-2.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-md border border-amber-200/60 dark:border-amber-900/60 flex items-center justify-between font-medium">
-                  <span>Efetivo: {formatCurrency(owner.effective_amount || 0)}</span>
-                  <span className="font-bold">Previsto: {formatCurrency(owner.forecast_amount)}</span>
+                <div className="mt-2.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded-md border border-amber-200/60 dark:border-amber-900/60 flex items-center justify-between font-medium">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectOwner(owner.owner_id)
+                      onForecastFilterChange?.(
+                        isSelected && forecastFilter === 'effective' ? 'all' : 'effective'
+                      )
+                    }}
+                    title="Filtrar apenas gastos efetivos (confirmados)"
+                    className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                      isSelected && forecastFilter === 'effective'
+                        ? 'bg-amber-200 dark:bg-amber-900 font-extrabold ring-1 ring-amber-400'
+                        : 'hover:bg-amber-100/80 dark:hover:bg-amber-900/50'
+                    }`}
+                  >
+                    Efetivo: {formatCurrency(owner.effective_amount || 0)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectOwner(owner.owner_id)
+                      onForecastFilterChange?.(
+                        isSelected && forecastFilter === 'forecast' ? 'all' : 'forecast'
+                      )
+                    }}
+                    title="Filtrar apenas gastos previstos / estimativas deste membro"
+                    className={`px-1.5 py-0.5 rounded transition-all font-bold cursor-pointer ${
+                      isSelected && forecastFilter === 'forecast'
+                        ? 'bg-amber-300 text-amber-950 dark:bg-amber-800 dark:text-amber-100 font-extrabold ring-1 ring-amber-500'
+                        : 'hover:bg-amber-100/80 dark:hover:bg-amber-900/50'
+                    }`}
+                  >
+                    Previsto: {formatCurrency(owner.forecast_amount)}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -193,20 +236,75 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
             {/* EXPANDABLE DETAILS DRAWER (Visible when clicked / selected) */}
             {isSelected && (
               <div className="px-4 pb-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-850/60 animate-in fade-in duration-200 space-y-3">
-                {/* Details: Paid vs Pending */}
+                {/* Details: Paid vs Pending - Clickable interactive filters */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-emerald-50/80 dark:bg-emerald-950/50 rounded-lg p-2 border border-emerald-200/60 dark:border-emerald-900/60">
-                    <p className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">Já Quitado</p>
-                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                  {/* Green Box: Já Quitado */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectOwner(owner.owner_id)
+                      onStatusFilterChange?.(statusFilter === 'paid' ? 'all' : 'paid')
+                    }}
+                    title="Clique para filtrar apenas o que já foi quitado na tabela abaixo"
+                    className={`rounded-lg p-2.5 border text-left transition-all duration-150 cursor-pointer ${
+                      statusFilter === 'paid'
+                        ? 'bg-emerald-600 border-emerald-700 text-white shadow-sm ring-2 ring-emerald-400/60 scale-[1.02]'
+                        : 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-200/60 dark:border-emerald-900/60 hover:border-emerald-400 dark:hover:border-emerald-700 hover:bg-emerald-100/80 dark:hover:bg-emerald-950/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className={`text-[10px] font-bold ${
+                        statusFilter === 'paid' ? 'text-white' : 'text-emerald-800 dark:text-emerald-300'
+                      }`}>
+                        Já Quitado
+                      </p>
+                      {statusFilter === 'paid' && (
+                        <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-extrabold text-white">
+                          Ativo ✓
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm font-extrabold mt-0.5 ${
+                      statusFilter === 'paid' ? 'text-white' : 'text-emerald-700 dark:text-emerald-400'
+                    }`}>
                       {formatCurrency(owner.paid_amount)}
                     </p>
-                  </div>
-                  <div className="bg-rose-50/80 dark:bg-rose-950/50 rounded-lg p-2 border border-rose-200/60 dark:border-rose-900/60">
-                    <p className="text-[10px] font-semibold text-rose-800 dark:text-rose-300">Pendente</p>
-                    <p className="text-sm font-bold text-rose-700 dark:text-rose-400 mt-0.5">
+                  </button>
+
+                  {/* Red Box: Pendente */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectOwner(owner.owner_id)
+                      onStatusFilterChange?.(statusFilter === 'pending' ? 'all' : 'pending')
+                    }}
+                    title="Clique para filtrar apenas tudo o que você / este membro deve (pendente) na tabela"
+                    className={`rounded-lg p-2.5 border text-left transition-all duration-150 cursor-pointer ${
+                      statusFilter === 'pending'
+                        ? 'bg-rose-600 border-rose-700 text-white shadow-sm ring-2 ring-rose-400/60 scale-[1.02]'
+                        : 'bg-rose-50/80 dark:bg-rose-950/50 border-rose-200/60 dark:border-rose-900/60 hover:border-rose-400 dark:hover:border-rose-700 hover:bg-rose-100/80 dark:hover:bg-rose-950/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className={`text-[10px] font-bold ${
+                        statusFilter === 'pending' ? 'text-white' : 'text-rose-800 dark:text-rose-300'
+                      }`}>
+                        Pendente
+                      </p>
+                      {statusFilter === 'pending' && (
+                        <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-extrabold text-white">
+                          Ativo ✓
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm font-extrabold mt-0.5 ${
+                      statusFilter === 'pending' ? 'text-white' : 'text-rose-700 dark:text-rose-400'
+                    }`}>
                       {formatCurrency(owner.pending_amount)}
                     </p>
-                  </div>
+                  </button>
                 </div>
 
                 {/* Progress Bar */}
@@ -240,13 +338,38 @@ export const FamilyCards: React.FC<FamilyCardsProps> = ({
 
                 {/* Filter indicator & action */}
                 <div className="pt-1 flex items-center justify-between text-[11px]">
-                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <Filter className="w-3 h-3" />
-                    Filtrando tabela abaixo
+                  <span className="inline-flex items-center gap-1 font-semibold">
+                    <Filter className="w-3 h-3 text-emerald-500" />
+                    {statusFilter === 'pending' ? (
+                      <span className="text-rose-600 dark:text-rose-400 font-bold">
+                        Filtrando: Apenas Pendentes (o que deve)
+                      </span>
+                    ) : statusFilter === 'paid' ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                        Filtrando: Apenas Quitados
+                      </span>
+                    ) : forecastFilter === 'forecast' ? (
+                      <span className="text-amber-600 dark:text-amber-400 font-bold">
+                        Filtrando: Apenas Previstos
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        Filtrando tabela abaixo
+                      </span>
+                    )}
                   </span>
-                  <span className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium underline">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectOwner(null)
+                      onStatusFilterChange?.('all')
+                      onForecastFilterChange?.('all')
+                    }}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium underline cursor-pointer"
+                  >
                     Fechar detalhes ✕
-                  </span>
+                  </button>
                 </div>
               </div>
             )}

@@ -23,6 +23,10 @@ interface TransactionTableProps {
   currentMonth?: string
   selectedOwnerId: number | null
   onSelectOwner: (ownerId: number | null) => void
+  statusFilter?: 'all' | 'pending' | 'paid'
+  onStatusFilterChange?: (status: 'all' | 'pending' | 'paid') => void
+  forecastFilter?: 'all' | 'effective' | 'forecast'
+  onForecastFilterChange?: (forecast: 'all' | 'effective' | 'forecast') => void
   onTogglePaid: (id: number) => void
   onDeleteTransaction: (id: number) => void
   onEditTransaction: (tx: Transaction) => void
@@ -50,14 +54,24 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   currentMonth,
   selectedOwnerId,
   onSelectOwner,
+  statusFilter: statusFilterProp,
+  onStatusFilterChange: onStatusFilterChangeProp,
+  forecastFilter: forecastFilterProp,
+  onForecastFilterChange: onForecastFilterChangeProp,
   onTogglePaid,
   onDeleteTransaction,
   onEditTransaction,
   isUpdatingId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
-  const [forecastFilter, setForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
+  const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
+  const [internalForecastFilter, setInternalForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
+
+  const statusFilter = statusFilterProp ?? internalStatusFilter
+  const setStatusFilter = onStatusFilterChangeProp ?? setInternalStatusFilter
+
+  const forecastFilter = forecastFilterProp ?? internalForecastFilter
+  const setForecastFilter = onForecastFilterChangeProp ?? setInternalForecastFilter
 
   const ownersMap = new Map(owners.map((o) => [o.id, o]))
   const cardsMap = new Map(cards.map((c) => [c.id, c]))
@@ -139,6 +153,21 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
               {filtered.length}
             </span>
+            {(selectedOwnerId !== null || statusFilter !== 'all' || forecastFilter !== 'all' || searchTerm) && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectOwner(null)
+                  setStatusFilter('all')
+                  setForecastFilter('all')
+                  setSearchTerm('')
+                }}
+                className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-900 cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                Limpar filtros
+              </button>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Clique no status de pagamento para alternar entre quitado ou pendente
