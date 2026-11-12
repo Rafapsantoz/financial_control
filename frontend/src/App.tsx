@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Monitor, Smartphone, Trash2, X } from 'lucide-react'
 import { Header } from './components/layout/Header'
 import { FamilyCards } from './components/dashboard/FamilyCards'
 import { SettlePaymentModal } from './components/dashboard/SettlePaymentModal'
@@ -40,21 +40,30 @@ export function App() {
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
     return typeof window !== 'undefined' ? window.innerWidth < 768 : false
   })
-  const [forceDesktopView, setForceDesktopView] = useState<boolean>(() => {
-    return localStorage.getItem('fo_force_desktop') === 'true'
+
+  // Explicit user preference for mobile vs desktop mode
+  const [activeViewMode, setActiveViewMode] = useState<'desktop' | 'mobile'>(() => {
+    const saved = localStorage.getItem('fo_view_mode')
+    if (saved === 'desktop' || saved === 'mobile') return saved
+    return typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop'
   })
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileViewport(window.innerWidth < 768)
+      const isMobile = window.innerWidth < 768
+      setIsMobileViewport(isMobile)
+      const explicit = localStorage.getItem('fo_view_mode')
+      if (!explicit) {
+        setActiveViewMode(isMobile ? 'mobile' : 'desktop')
+      }
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const handleToggleDesktopView = (force: boolean) => {
-    setForceDesktopView(force)
-    localStorage.setItem('fo_force_desktop', force ? 'true' : 'false')
+  const handleSetViewMode = (mode: 'desktop' | 'mobile') => {
+    setActiveViewMode(mode)
+    localStorage.setItem('fo_view_mode', mode)
   }
 
   useEffect(() => {
@@ -257,29 +266,49 @@ export function App() {
       ? `Consolidado (${activeCardNames.join(', ')})`
       : cards[0]?.card_name || 'Cartão de Crédito'
 
-  // Render Mobile Companion View when on small screens and not forcing desktop
-  if (isMobileViewport && !forceDesktopView) {
+  // Render Mobile Companion View when mobile mode is selected or default on small screens
+  if (activeViewMode === 'mobile') {
     return (
-      <div className="selection:bg-emerald-500 selection:text-white">
-        <MobileCompanion
-          currentMonth={currentMonth}
-          onMonthChange={(m) => setCurrentMonth(m)}
-          summary={summary}
-          transactions={transactions}
-          owners={owners}
-          cards={cards}
-          categories={categories}
-          onTogglePaid={handleTogglePaid}
-          onDeleteTransaction={handleDeleteTransaction}
-          onEditTransaction={(tx) => setEditingTransaction(tx)}
-          onAddTransaction={handleAddTransaction}
-          onOpenUploadModal={() => setIsUploadModalOpen(true)}
-          onRefresh={() => loadMonthData(currentMonth)}
-          isLoading={isLoading}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          onSwitchToDesktop={() => handleToggleDesktopView(true)}
-        />
+      <div className="min-h-screen bg-slate-900/95 sm:bg-slate-900/90 flex flex-col items-center justify-start selection:bg-emerald-500 selection:text-white">
+        {/* Simulation bar for Desktop displays */}
+        <div className="w-full bg-slate-900 border-b border-slate-800 text-slate-300 px-4 py-2 flex items-center justify-between text-xs sticky top-0 z-50 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">📱 Visualização Mobile de Bolso</span>
+            <span className="text-slate-400 hidden sm:inline">(Otimizado para Smartphones)</span>
+          </div>
+          <button
+            onClick={() => handleSetViewMode('desktop')}
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg border border-slate-700 transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Retornar para o painel completo de desktop"
+          >
+            <Monitor className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Voltar ao Modo Desktop</span>
+          </button>
+        </div>
+
+        {/* Centralized Mobile Companion Wrapper */}
+        <div className="w-full sm:max-w-md bg-white dark:bg-slate-950 sm:shadow-2xl sm:border-x sm:border-slate-200 sm:dark:border-slate-800 min-h-screen flex flex-col">
+          <MobileCompanion
+            currentMonth={currentMonth}
+            onMonthChange={(m) => setCurrentMonth(m)}
+            summary={summary}
+            transactions={transactions}
+            owners={owners}
+            cards={cards}
+            categories={categories}
+            onTogglePaid={handleTogglePaid}
+            onDeleteTransaction={handleDeleteTransaction}
+            onEditTransaction={(tx) => setEditingTransaction(tx)}
+            onAddTransaction={handleAddTransaction}
+            onOpenUploadModal={() => setIsUploadModalOpen(true)}
+            onRefresh={() => loadMonthData(currentMonth)}
+            isLoading={isLoading}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onSwitchToDesktop={() => handleSetViewMode('desktop')}
+          />
+        </div>
 
         {/* Global Modals for Mobile Companion */}
         <EditTransactionModal
@@ -341,11 +370,11 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Banner de Retorno ao Modo Mobile (quando forçado pelo usuário em tela pequena) */}
-      {forceDesktopView && isMobileViewport && (
+      {isMobileViewport && (
         <div className="bg-indigo-600 text-white text-xs py-1.5 px-4 text-center font-bold flex items-center justify-center gap-2 sticky top-0 z-50">
-          <span>Modo Desktop Completo Ativo</span>
+          <span>Modo Desktop Ativo</span>
           <button
-            onClick={() => handleToggleDesktopView(false)}
+            onClick={() => handleSetViewMode('mobile')}
             className="bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded-lg cursor-pointer transition-colors"
           >
             Voltar para Modo Bolso Mobile 📱
@@ -365,6 +394,7 @@ export function App() {
         onViewChange={setCurrentView}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onToggleMobileMode={() => handleSetViewMode('mobile')}
       />
 
       {/* Main Container */}

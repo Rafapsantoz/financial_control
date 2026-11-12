@@ -154,6 +154,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
+  // Carrega contagens de faturas e contas bancárias imediatamente no mount para que as abas não fiquem zeradas (0)
+  useEffect(() => {
+    loadUploadsHistory()
+    loadBankSummary()
+  }, [])
+
   useEffect(() => {
     if (activeTab === 'uploads') {
       loadUploadsHistory()

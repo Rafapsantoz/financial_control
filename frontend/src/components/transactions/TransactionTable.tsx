@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Download,
   FileSpreadsheet,
@@ -50,6 +52,19 @@ const formatInvoiceBadge = (invoiceMonth: string) => {
   return `Fatura ${invoiceMonth}`
 }
 
+const generatePageNumbers = (current: number, total: number): (number | string)[] => {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total]
+  }
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  }
+  return [1, '...', current - 1, current, current + 1, '...', total]
+}
+
 export const TransactionTable: React.FC<TransactionTableProps> = ({
   transactions,
   owners,
@@ -71,12 +86,19 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
   const [internalForecastFilter, setInternalForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
   const [isExporting, setIsExporting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(15)
 
   const statusFilter = statusFilterProp ?? internalStatusFilter
   const setStatusFilter = onStatusFilterChangeProp ?? setInternalStatusFilter
 
   const forecastFilter = forecastFilterProp ?? internalForecastFilter
   const setForecastFilter = onForecastFilterChangeProp ?? setInternalForecastFilter
+
+  // Reset to first page when any filter criteria changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, selectedOwnerId, statusFilter, forecastFilter, currentMonth])
 
   const ownersMap = new Map(owners.map((o) => [o.id, o]))
   const cardsMap = new Map(cards.map((c) => [c.id, c]))
@@ -133,6 +155,14 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     }
     return true
   })
+
+  // Pagination calculations
+  const totalItems = filtered.length
+  const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(totalItems / pageSize))
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+  const startIndex = pageSize === -1 ? 0 : (safeCurrentPage - 1) * pageSize
+  const endIndex = pageSize === -1 ? totalItems : Math.min(startIndex + pageSize, totalItems)
+  const paginatedTransactions = pageSize === -1 ? filtered : filtered.slice(startIndex, endIndex)
 
   const getOwnerBadge = (ownerId: number) => {
     const owner = ownersMap.get(ownerId)
@@ -340,10 +370,10 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table with Vertical Scroll & Sticky Header */}
+      <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-100/80 dark:bg-slate-800">
+          <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10 shadow-xs backdrop-blur">
             <tr className="border-b border-slate-200 dark:border-slate-700/80 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
               <th className="py-3 px-4">Data</th>
               <th className="py-3 px-4">Descrição</th>
@@ -371,7 +401,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                 </td>
               </tr>
             ) : (
-              filtered.map((tx) => {
+              paginatedTransactions.map((tx) => {
                 const isToggling = isUpdatingId === tx.id
                 const category = categoriesMap.get(tx.type_id)?.description || 'Outros'
 
@@ -529,6 +559,103 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination & Summary Footer */}
+      <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        {/* Counter */}
+        <div className="text-slate-600 dark:text-slate-400 font-medium">
+          {totalItems === 0 ? (
+            <span>Nenhum lançamento no filtro</span>
+          ) : pageSize === -1 ? (
+            <span>
+              Mostrando todas as <strong className="text-slate-900 dark:text-slate-100">{totalItems}</strong> transações
+            </span>
+          ) : (
+            <span>
+              Mostrando <strong className="text-slate-900 dark:text-slate-100">{startIndex + 1}</strong> a{' '}
+              <strong className="text-slate-900 dark:text-slate-100">{endIndex}</strong> de{' '}
+              <strong className="text-slate-900 dark:text-slate-100">{totalItems}</strong> transações
+            </span>
+          )}
+        </div>
+
+        {/* Right controls: Page Size & Navigation */}
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Page Size Selector */}
+          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-medium">Por página:</span>
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 shadow-2xs">
+              {[15, 25, 50, -1].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => {
+                    setPageSize(size)
+                    setCurrentPage(1)
+                  }}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                    pageSize === size
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {size === -1 ? 'Todas' : size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Page Navigation Buttons */}
+          {pageSize !== -1 && totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                title="Página Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Numbered page buttons with smart ellipsis */}
+              <div className="flex items-center gap-1">
+                {generatePageNumbers(safeCurrentPage, totalPages).map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 dark:text-slate-500 font-bold">
+                        ...
+                      </span>
+                    )
+                  }
+                  const pageNum = Number(p)
+                  const isActive = pageNum === safeCurrentPage
+                  return (
+                    <button
+                      key={`page-${pageNum}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-2xs'
+                          : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                title="Próxima Página"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

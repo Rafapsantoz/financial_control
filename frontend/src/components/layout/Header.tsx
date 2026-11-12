@@ -12,6 +12,7 @@ import {
   PlusCircle,
   RefreshCw,
   Settings,
+  Smartphone,
   Sparkles,
   Sun,
   Target,
@@ -29,6 +30,7 @@ interface HeaderProps {
   onViewChange: (view: 'dashboard' | 'macro' | 'budget' | 'admin') => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  onToggleMobileMode?: () => void
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -42,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onViewChange,
   theme,
   onToggleTheme,
+  onToggleMobileMode,
 }) => {
   const handlePrevMonth = () => {
     const [year, month] = currentMonth.split('-').map(Number)
@@ -180,6 +183,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Buttons & Theme Toggle */}
         <div className="flex items-center gap-2.5">
+          {/* Mobile Mode Switcher Button */}
+          {onToggleMobileMode && (
+            <button
+              onClick={onToggleMobileMode}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 transition-all shadow-xs cursor-pointer"
+              title="Alternar para a versão mobile de bolso"
+            >
+              <Smartphone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Modo Mobile</span>
+            </button>
+          )}
+
           {/* Theme Toggle Button */}
           <button
             onClick={onToggleTheme}
