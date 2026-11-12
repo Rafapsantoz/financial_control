@@ -33,19 +33,35 @@ Sistema moderno e portátil para **controle de gastos, divisão de faturas de ca
 
 ---
 
-## 🚀 Como Executar o Projeto (1 Clique)
+## 📦 Instalação Rápida (Nova Máquina / Publicação)
 
-### Opção 1: Clique Duplo no Windows
-Basta dar um duplo clique no arquivo [`start.bat`](file:///C:/Antigravity/programs/financial_organizer/start.bat).
-O script inicializa o backend FastAPI, conecta o banco SQLite, serve o frontend React e abre o navegador automaticamente em **`http://localhost:8000`**.
+O sistema conta com instaladores visuais automáticos que preparam tudo (Python, dependências, compilação do React e banco SQLite):
 
-### Opção 2: Via Terminal PowerShell
-```powershell
-# Execução direta pelo script
-.\start.ps1
+### 🪟 No Windows (1 Clique)
+1. Dê um duplo-clique no arquivo [`install.bat`](file:///C:/Antigravity/programs/financial_organizer/install.bat) (ou execute `.\install.ps1` no PowerShell).
+2. O instalador verificará o Python e Node.js, configurará o `.env`, criará o ambiente virtual `backend\.venv`, instalará os pacotes e compilará o frontend.
+3. Ao finalizar, você já pode optar por abrir o sistema imediatamente.
 
-# Ou iniciando via CLI utilitário
-& ".\backend\.venv\Scripts\python.exe" "scripts\fo_cli.py" server
+### 🐧 No Linux (Terminal)
+Abra o terminal na pasta do projeto e execute:
+```bash
+chmod +x install.sh start.sh
+./install.sh
+```
+
+---
+
+## 🚀 Como Executar no Dia a Dia
+
+Após a instalação, para iniciar o RPsec Financeiro a qualquer momento:
+
+### 🪟 No Windows
+- **1 Clique:** Dê um duplo-clique no arquivo [`start.bat`](file:///C:/Antigravity/programs/financial_organizer/start.bat) (ou execute `.\start.ps1`).
+- O sistema iniciará o backend FastAPI, servirá a aplicação e abrirá automaticamente o navegador em **`http://localhost:8000`**.
+
+### 🐧 No Linux
+```bash
+./start.sh
 ```
 
 ---
