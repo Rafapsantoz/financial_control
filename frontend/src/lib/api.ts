@@ -1,4 +1,7 @@
 import {
+  BankAccount,
+  BankAccountBalanceItem,
+  BankAccountsSummary,
   Card,
   Category,
   DashboardSummaryResponse,
@@ -229,7 +232,7 @@ export async function fetchCategories(): Promise<Category[]> {
   return res.json()
 }
 
-export async function createCategory(data: { description: string }): Promise<Category> {
+export async function createCategory(data: { description: string; fixed_cost?: number }): Promise<Category> {
   const res = await fetch(`${BASE_URL}/categories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -242,7 +245,7 @@ export async function createCategory(data: { description: string }): Promise<Cat
   return res.json()
 }
 
-export async function updateCategory(id: number, data: { description: string }): Promise<Category> {
+export async function updateCategory(id: number, data: { description?: string; fixed_cost?: number }): Promise<Category> {
   const res = await fetch(`${BASE_URL}/categories/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -403,4 +406,98 @@ export async function exportTransactionsExcel(params: {
     throw new Error(err.detail || 'Falha ao exportar planilha Excel')
   }
   return res.blob()
+}
+
+// --- BANK ACCOUNTS & CDI YIELD API ---
+
+export async function fetchBankAccounts(): Promise<BankAccount[]> {
+  const res = await fetch(`${BASE_URL}/bank-accounts`)
+  if (!res.ok) throw new Error('Falha ao buscar contas bancárias')
+  return res.json()
+}
+
+export async function fetchBankAccountsSummary(): Promise<BankAccountsSummary> {
+  const res = await fetch(`${BASE_URL}/bank-accounts/summary`)
+  if (!res.ok) throw new Error('Falha ao buscar resumo de contas bancárias')
+  return res.json()
+}
+
+export async function createBankAccount(data: {
+  name: string
+  account_type?: string
+  cdi_rate?: number
+  cdi_monthly_rate?: number
+  notes?: string
+  initial_balances?: BankAccountBalanceItem[]
+}): Promise<BankAccount> {
+  const res = await fetch(`${BASE_URL}/bank-accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao cadastrar conta bancária' }))
+    throw new Error(err.detail || 'Falha ao cadastrar conta bancária')
+  }
+  return res.json()
+}
+
+export async function updateBankAccount(
+  id: number,
+  data: {
+    name?: string
+    account_type?: string
+    cdi_rate?: number
+    cdi_monthly_rate?: number
+    notes?: string
+  }
+): Promise<BankAccount> {
+  const res = await fetch(`${BASE_URL}/bank-accounts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar conta bancária' }))
+    throw new Error(err.detail || 'Falha ao atualizar conta bancária')
+  }
+  return res.json()
+}
+
+export async function updateBankAccountBalances(
+  id: number,
+  balances: BankAccountBalanceItem[]
+): Promise<BankAccount> {
+  const res = await fetch(`${BASE_URL}/bank-accounts/${id}/balances`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ balances }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao atualizar saldos da conta' }))
+    throw new Error(err.detail || 'Falha ao atualizar saldos da conta')
+  }
+  return res.json()
+}
+
+export async function deleteBankAccount(id: number): Promise<{ detail: string }> {
+  const res = await fetch(`${BASE_URL}/bank-accounts/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao excluir conta bancária' }))
+    throw new Error(err.detail || 'Falha ao excluir conta bancária')
+  }
+  return res.json()
+}
+
+export async function fetchFixedCostsSummary(): Promise<{
+  total_fixed_cost: number
+  count_with_fixed: number
+  total_categories: number
+  categories: { id: number; description: string; fixed_cost: number }[]
+}> {
+  const res = await fetch(`${BASE_URL}/categories/summary/fixed-costs`)
+  if (!res.ok) throw new Error('Falha ao buscar resumo de custos fixos')
+  return res.json()
 }

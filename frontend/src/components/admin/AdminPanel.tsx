@@ -15,16 +15,38 @@ import {
   FileCheck2,
   ShieldCheck,
   RefreshCw,
+  Landmark,
+  PiggyBank,
+  DollarSign,
+  Calculator,
+  TrendingUp,
+  Percent,
+  Sparkles,
+  ArrowRight,
+  Info,
 } from 'lucide-react'
-import { Card, Category, InvoiceUpload, Owner } from '../../types'
 import {
+  BankAccount,
+  BankAccountBalanceItem,
+  BankAccountsSummary,
+  Card,
+  Category,
+  InvoiceUpload,
+  Owner,
+} from '../../types'
+import {
+  createBankAccount,
   createCard,
   createCategory,
   createOwner,
+  deleteBankAccount,
   deleteCard,
   deleteCategory,
   deleteOwner,
+  fetchBankAccountsSummary,
   fetchInvoiceUploads,
+  updateBankAccount,
+  updateBankAccountBalances,
   updateCard,
   updateCategory,
   updateOwner,
@@ -44,9 +66,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   categories,
   onRefreshMasters,
 }) => {
-  const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'uploads'>('owners')
+  const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'bank_accounts' | 'uploads'>('owners')
   const [invoiceUploads, setInvoiceUploads] = useState<InvoiceUpload[]>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
+
+  // Bank Accounts & CDI Yield State
+  const [bankSummary, setBankSummary] = useState<BankAccountsSummary | null>(null)
+  const [loadingBankAccounts, setLoadingBankAccounts] = useState(false)
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false)
+  const [editingBank, setEditingBank] = useState<BankAccount | null>(null)
+  const [bankName, setBankName] = useState('')
+  const [bankAccountType, setBankAccountType] = useState('Conta Pagamento / CDI')
+  const [bankCdiRate, setBankCdiRate] = useState('100')
+  const [bankCdiMonthlyRate, setBankCdiMonthlyRate] = useState('0.85')
+  const [bankNotes, setBankNotes] = useState('')
+
+  // Member Balances Distribution Modal State
+  const [isBalancesModalOpen, setIsBalancesModalOpen] = useState(false)
+  const [managingBankForBalances, setManagingBankForBalances] = useState<BankAccount | null>(null)
+  const [balancesMap, setBalancesMap] = useState<Record<number, string>>({})
 
   const loadUploadsHistory = async () => {
     try {
@@ -60,9 +98,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
+  const loadBankSummary = async () => {
+    try {
+      setLoadingBankAccounts(true)
+      const data = await fetchBankAccountsSummary()
+      setBankSummary(data)
+    } catch (err: any) {
+      console.error('Erro ao buscar resumo de contas bancárias:', err)
+    } finally {
+      setLoadingBankAccounts(false)
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'uploads') {
       loadUploadsHistory()
+    } else if (activeTab === 'bank_accounts') {
+      loadBankSummary()
     }
   }, [activeTab])
 
@@ -84,6 +136,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [categoryDesc, setCategoryDesc] = useState('')
+  const [categoryFixedCost, setCategoryFixedCost] = useState('')
 
   const [loadingAction, setLoadingAction] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -246,9 +299,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (cat) {
       setEditingCategory(cat)
       setCategoryDesc(cat.description)
+      setCategoryFixedCost(
+        cat.fixed_cost !== undefined && cat.fixed_cost !== null ? String(cat.fixed_cost) : ''
+      )
     } else {
       setEditingCategory(null)
       setCategoryDesc('')
+      setCategoryFixedCost('')
     }
     setIsCategoryModalOpen(true)
   }
@@ -263,14 +320,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     try {
       setLoadingAction(true)
       clearFeedback()
+      const fixedCostVal = categoryFixedCost ? parseFloat(categoryFixedCost.replace(',', '.')) : 0.0
+
       if (editingCategory) {
         await updateCategory(editingCategory.id, {
           description: categoryDesc.trim(),
+          fixed_cost: isNaN(fixedCostVal) ? 0.0 : fixedCostVal,
         })
         setSuccessMsg(`Categoria "${categoryDesc}" atualizada com sucesso!`)
       } else {
         await createCategory({
           description: categoryDesc.trim(),
+          fixed_cost: isNaN(fixedCostVal) ? 0.0 : fixedCostVal,
         })
         setSuccessMsg(`Categoria "${categoryDesc}" criada com sucesso!`)
       }
@@ -293,6 +354,130 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       await onRefreshMasters()
     } catch (err: any) {
       setErrorMsg(err.message || 'Não foi possível excluir a categoria.')
+    } finally {
+      setLoadingAction(false)
+    }
+  }
+
+  // --- BANK ACCOUNTS & CDI YIELD HANDLERS ---
+  const handleOpenBankModal = (bank?: BankAccount) => {
+    clearFeedback()
+    if (bank) {
+      setEditingBank(bank)
+      setBankName(bank.name)
+      setBankAccountType(bank.account_type || 'Conta Pagamento / CDI')
+      setBankCdiRate(String(bank.cdi_rate ?? 100))
+      setBankCdiMonthlyRate(String(bank.cdi_monthly_rate ?? 0.85))
+      setBankNotes(bank.notes || '')
+    } else {
+      setEditingBank(null)
+      setBankName('')
+      setBankAccountType('Conta Pagamento / CDI')
+      setBankCdiRate('100')
+      setBankCdiMonthlyRate('0.85')
+      setBankNotes('')
+    }
+    setIsBankModalOpen(true)
+  }
+
+  const handleSaveBankAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!bankName.trim()) {
+      setErrorMsg('Nome da conta bancária é obrigatório.')
+      return
+    }
+
+    try {
+      setLoadingAction(true)
+      clearFeedback()
+      const cdiRateNum = parseFloat(bankCdiRate.replace(',', '.')) || 100.0
+      const cdiMonthlyNum = parseFloat(bankCdiMonthlyRate.replace(',', '.')) || 0.85
+
+      if (editingBank) {
+        await updateBankAccount(editingBank.id, {
+          name: bankName.trim(),
+          account_type: bankAccountType.trim(),
+          cdi_rate: cdiRateNum,
+          cdi_monthly_rate: cdiMonthlyNum,
+          notes: bankNotes.trim() || undefined,
+        })
+        setSuccessMsg(`Conta bancária "${bankName}" atualizada com sucesso!`)
+      } else {
+        await createBankAccount({
+          name: bankName.trim(),
+          account_type: bankAccountType.trim(),
+          cdi_rate: cdiRateNum,
+          cdi_monthly_rate: cdiMonthlyNum,
+          notes: bankNotes.trim() || undefined,
+        })
+        setSuccessMsg(`Conta bancária "${bankName}" cadastrada com sucesso!`)
+      }
+      setIsBankModalOpen(false)
+      await loadBankSummary()
+      await onRefreshMasters()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao salvar conta bancária.')
+    } finally {
+      setLoadingAction(false)
+    }
+  }
+
+  const handleDeleteBankAccount = async (bank: BankAccount) => {
+    if (!window.confirm(`Deseja realmente remover a conta bancária "${bank.name}"? Todos os saldos vinculados a ela serão excluídos.`)) return
+    try {
+      setLoadingAction(true)
+      clearFeedback()
+      await deleteBankAccount(bank.id)
+      setSuccessMsg(`Conta bancária "${bank.name}" removida com sucesso.`)
+      await loadBankSummary()
+      await onRefreshMasters()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Não foi possível excluir a conta bancária.')
+    } finally {
+      setLoadingAction(false)
+    }
+  }
+
+  // --- BALANCES DISTRIBUTION HANDLERS ---
+  const handleOpenBalancesModal = (bank: BankAccount) => {
+    clearFeedback()
+    setManagingBankForBalances(bank)
+    const map: Record<number, string> = {}
+    owners.forEach((o) => {
+      const existing = bank.balances.find((b) => b.owner_id === o.id)
+      map[o.id] = existing ? String(existing.balance) : '0'
+    })
+    setBalancesMap(map)
+    setIsBalancesModalOpen(true)
+  }
+
+  const handleSaveBalances = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!managingBankForBalances) return
+
+    try {
+      setLoadingAction(true)
+      clearFeedback()
+      const payload: BankAccountBalanceItem[] = []
+      owners.forEach((o) => {
+        const raw = balancesMap[o.id] || '0'
+        const val = parseFloat(raw.replace(',', '.'))
+        if (!isNaN(val) && val > 0) {
+          payload.push({
+            owner_id: o.id,
+            owner_name: o.name,
+            balance: val,
+          })
+        }
+      })
+
+      await updateBankAccountBalances(managingBankForBalances.id, payload)
+      setSuccessMsg(`Saldos por membro da conta "${managingBankForBalances.name}" atualizados com sucesso!`)
+      setIsBalancesModalOpen(false)
+      await loadBankSummary()
+      await onRefreshMasters()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao salvar saldos da conta.')
     } finally {
       setLoadingAction(false)
     }
@@ -340,6 +525,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span>Nova Categoria</span>
             </button>
           )}
+          {activeTab === 'bank_accounts' && (
+            <button
+              onClick={() => handleOpenBankModal()}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all active:scale-95"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Nova Conta Bancária</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -369,13 +563,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Tabs Switcher */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => {
             setActiveTab('owners')
             clearFeedback()
           }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'owners'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -390,7 +584,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setActiveTab('cards')
             clearFeedback()
           }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'cards'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -405,14 +599,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setActiveTab('categories')
             clearFeedback()
           }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'categories'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <Tag className="w-4 h-4" />
-          <span>Categorias & Tipos ({categories.length})</span>
+          <span>Categorias & Custos Fixos ({categories.length})</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('bank_accounts')
+            clearFeedback()
+          }}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+            activeTab === 'bank_accounts'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Landmark className="w-4 h-4" />
+          <span>Contas Bancárias & CDI ({bankSummary?.accounts.length || 0})</span>
         </button>
 
         <button
@@ -420,7 +629,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setActiveTab('uploads')
             clearFeedback()
           }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'uploads'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -582,59 +791,369 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* TAB 3: CATEGORIES */}
+      {/* TAB 3: CATEGORIES & FIXED COSTS */}
       {activeTab === 'categories' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">
-            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-              Tipos de Dívidas e Categorias
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Categorias utilizadas para classificação das compras e desdobramento proporcional no dashboard.
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-100/80 dark:bg-slate-800">
-                <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
-                  <th className="py-3 px-4 w-16">ID</th>
-                  <th className="py-3 px-4">Descrição da Categoria</th>
-                  <th className="py-3 px-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
-                {categories.map((cat) => (
-                  <tr
-                    key={cat.id}
-                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
-                  >
-                    <td className="py-3 px-4 text-xs font-mono text-slate-400">#{cat.id}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 flex items-center justify-center">
-                        <Tag className="w-3.5 h-3.5" />
-                      </div>
-                      <span>{cat.description}</span>
-                    </td>
-                    <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                      <button
-                        onClick={() => handleOpenCategoryModal(cat)}
-                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                        title="Editar categoria"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(cat)}
-                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                        title="Remover categoria"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
+        <div className="space-y-4">
+          {/* Somatória de Custos Fixos em Destaque */}
+          {(() => {
+            const totalFixed = categories.reduce((sum, c) => sum + (c.fixed_cost || 0), 0)
+            const countWithFixed = categories.filter((c) => (c.fixed_cost || 0) > 0).length
+            return (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-teal-900/90 via-slate-900 to-indigo-950 border border-teal-500/30 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300">
+                    <Calculator className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-teal-200 uppercase tracking-wider block">
+                      Somatória de Custos Fixos Cadastrados
+                    </span>
+                    <div className="text-2xl sm:text-3xl font-black text-white mt-0.5">
+                      {formatCurrency(totalFixed)}
+                      <span className="text-sm font-semibold text-teal-300/80 ml-1.5">/ mês</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs text-teal-100/80 bg-white/10 px-4 py-2.5 rounded-xl border border-white/10">
+                  <div>
+                    <span className="font-bold text-white block">{countWithFixed} de {categories.length}</span>
+                    <span>Categorias com custo fixo</span>
+                  </div>
+                  <div className="h-6 w-px bg-white/20" />
+                  <div>
+                    <span className="font-bold text-white block">
+                      {countWithFixed > 0 ? formatCurrency(totalFixed / countWithFixed) : 'R$ 0,00'}
+                    </span>
+                    <span>Média por categoria</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                Tipos de Despesas & Custos Fixos por Categoria
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Cadastre a previsão orçamentária fixa de cada categoria para alimentar automaticamente a queima mensal e a macro projeção.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-100/80 dark:bg-slate-800">
+                  <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-4 w-16">ID</th>
+                    <th className="py-3 px-4">Descrição da Categoria</th>
+                    <th className="py-3 px-4 text-right">Custo Fixo Mensal (R$)</th>
+                    <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  {categories.map((cat) => {
+                    const fixedVal = cat.fixed_cost || 0
+                    return (
+                      <tr
+                        key={cat.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-xs font-mono text-slate-400">#{cat.id}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 flex items-center justify-center">
+                            <Tag className="w-3.5 h-3.5" />
+                          </div>
+                          <span>{cat.description}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold">
+                          {fixedVal > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                              {formatCurrency(fixedVal)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 dark:text-slate-500 font-normal">
+                              R$ 0,00
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                          <button
+                            onClick={() => handleOpenCategoryModal(cat)}
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                            title="Editar categoria e custo fixo"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(cat)}
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Remover categoria"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: BANK ACCOUNTS & CDI YIELD */}
+      {activeTab === 'bank_accounts' && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* 1. Global Financial Metrics Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {/* Saldo Total em Contas */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <span>Saldo Total em Conta (Tot)</span>
+                <PiggyBank className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-xl font-black text-slate-900 dark:text-slate-100">
+                {formatCurrency(bankSummary?.grand_total_balance || 0)}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">Soma de todos os saldos</p>
+            </div>
+
+            {/* Saldo de Outros / Família */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <span>Total de Outros</span>
+                <Users className="w-4 h-4 text-purple-500" />
+              </div>
+              <div className="text-xl font-black text-purple-600 dark:text-purple-400">
+                {formatCurrency(bankSummary?.grand_total_others || 0)}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">Mãe, Irmã e dependentes</p>
+            </div>
+
+            {/* Saldo Próprio do Rafael */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <span>Saldo Próprio (Rafael)</span>
+                <User className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-xl font-black text-blue-600 dark:text-blue-400">
+                {formatCurrency(bankSummary?.grand_total_owner || 0)}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">Tot - Total de Outros</p>
+            </div>
+
+            {/* Rendimento CDI Mensal Estimado */}
+            <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-500/30 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300 font-semibold mb-1">
+                <span>Rendimento CDI (Mês)</span>
+                <TrendingUp className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                +{formatCurrency(bankSummary?.grand_total_monthly_yield || 0)}
+              </div>
+              <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5 font-medium">
+                Tot × %CDI (fica para Rafael)
+              </p>
+            </div>
+
+            {/* Patrimônio Rafael com Rendimento */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white border border-indigo-700/50 shadow-md">
+              <div className="flex items-center justify-between text-xs text-indigo-200 mb-1">
+                <span className="font-semibold">Rafael Líquido Final</span>
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-xl font-black text-emerald-300">
+                {formatCurrency(bankSummary?.grand_total_net_with_yield || 0)}
+              </div>
+              <p className="text-[10px] text-indigo-300/80 mt-0.5">
+                Tot × Rendimento - Outros
+              </p>
+            </div>
+          </div>
+
+          {/* 2. Banner Didático da Fórmula */}
+          <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+              <Calculator className="w-4 h-4" />
+            </div>
+            <div className="text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
+              <p className="font-bold text-sm">
+                Fórmula de Rateio do Rendimento CDI Aplicada:
+              </p>
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                <code className="bg-white/80 dark:bg-slate-900 px-2 py-0.5 rounded font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                  Rafael Disponível = (Tot × Rendimento CDI) + Saldo Próprio Rafael
+                </code>
+                {' '}— Como o rendimento incide sobre todo o montante depositado na conta (inclusive a cota da sua mãe), esse ganho fica integralmente com você, enquanto o capital nominal dela permanece protegido para quando ela solicitar.
+              </p>
+            </div>
+          </div>
+
+          {/* 3. Listagem das Contas Bancárias */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm flex items-center gap-2">
+                  <Landmark className="w-4 h-4 text-emerald-600" />
+                  <span>Contas Bancárias & Titularidade dos Saldos</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Cadastre cada conta separadamente, informe quanto ela rende do CDI e defina a quem pertence cada parte do saldo.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadBankSummary}
+                  disabled={loadingBankAccounts}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+                  title="Atualizar saldos e rendimentos"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingBankAccounts ? 'animate-spin' : ''}`} />
+                  <span>Atualizar</span>
+                </button>
+                <button
+                  onClick={() => handleOpenBankModal()}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Nova Conta Bancária</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Listagem de contas */}
+            {!bankSummary || bankSummary.accounts.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 text-xs">
+                <Landmark className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                <p className="font-semibold text-slate-600 dark:text-slate-300">Nenhuma conta bancária cadastrada ainda.</p>
+                <p className="mt-1">Clique em "Nova Conta Bancária" para adicionar contas como Nubank, PicPay ou Inter e simular o rendimento do CDI.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {bankSummary.accounts.map((acc) => (
+                  <div key={acc.id} className="p-5 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Lado Esquerdo: Identificação da Conta */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold">
+                            <Landmark className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                                {acc.name}
+                              </h4>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                                {acc.account_type}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                <Percent className="w-3 h-3" />
+                                {acc.cdi_rate}% do CDI (~{acc.cdi_monthly_rate}% a.m.)
+                              </span>
+                              <span>•</span>
+                              <span>Rendimento Mensal Estimado: <b className="text-emerald-600 dark:text-emerald-400 font-mono">+{formatCurrency(acc.monthly_yield)}</b></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {acc.notes && (
+                          <p className="text-xs text-slate-400 italic pl-11">
+                            {acc.notes}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Lado Direito: Métricas Financeiras e Botões */}
+                      <div className="flex flex-wrap items-center gap-4 lg:gap-6">
+                        {/* Tot Saldo */}
+                        <div className="text-left lg:text-right">
+                          <span className="text-[11px] text-slate-400 block">Saldo Total (Tot)</span>
+                          <span className="font-extrabold text-base text-slate-900 dark:text-slate-100 font-mono">
+                            {formatCurrency(acc.total_balance)}
+                          </span>
+                        </div>
+
+                        {/* Saldo Outros */}
+                        <div className="text-left lg:text-right">
+                          <span className="text-[11px] text-purple-500 block">Total de Outros</span>
+                          <span className="font-bold text-sm text-purple-600 dark:text-purple-400 font-mono">
+                            {formatCurrency(acc.others_balance)}
+                          </span>
+                        </div>
+
+                        {/* Rafael Líquido */}
+                        <div className="text-left lg:text-right bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block uppercase tracking-wider">
+                            Rafael c/ Rendimento
+                          </span>
+                          <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono">
+                            {formatCurrency(acc.net_with_yield)}
+                          </span>
+                        </div>
+
+                        {/* Ações */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenBalancesModal(acc)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 cursor-pointer transition-colors"
+                            title="Distribuir saldo por membro (Rafael, Mãe, etc.)"
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                            <span>Dividir Saldo</span>
+                          </button>
+                          <button
+                            onClick={() => handleOpenBankModal(acc)}
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                            title="Editar conta bancária"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBankAccount(acc)}
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Excluir conta bancária"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detalhamento dos Membros que possuem saldo nesta conta */}
+                    <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-400">Distribuição do Saldo:</span>
+                      {acc.balances.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic">Nenhum saldo rateado ainda. Clique em "Dividir Saldo".</span>
+                      ) : (
+                        acc.balances.map((b) => {
+                          const isRaf = (b.owner_name || '').toLowerCase().includes('rafael')
+                          return (
+                            <span
+                              key={b.owner_id}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                                isRaf
+                                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                  : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                              }`}
+                            >
+                              <span className="font-bold">{b.owner_name}:</span>
+                              <span className="font-mono font-bold">{formatCurrency(b.balance)}</span>
+                              {isRaf && <span className="text-[10px] text-blue-500 font-bold">(+ rendimento)</span>}
+                            </span>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -912,7 +1431,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </h3>
               <button
                 onClick={() => setIsCategoryModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -932,21 +1451,303 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Custo Fixo Mensal Estimado (R$)</span>
+                  <span className="text-[11px] text-teal-600 dark:text-teal-400 font-normal">Opcional</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00 (Ex: 1200.00)"
+                  value={categoryFixedCost}
+                  onChange={(e) => setCategoryFixedCost(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100 font-mono"
+                />
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  Gasto fixo recorrente esperado para esta categoria. Alimenta a queima mensal e o Runway de sobrevivência.
+                </p>
+              </div>
+
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsCategoryModalOpen(false)}
                   disabled={loadingAction}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={loadingAction}
-                  className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
+                  className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {loadingAction ? 'Salvando...' : 'Salvar Categoria'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: BANK ACCOUNT FORM */}
+      {isBankModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <Landmark className="w-4 h-4 text-emerald-600" />
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                  {editingBank ? 'Editar Conta Bancária' : 'Nova Conta Bancária'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsBankModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveBankAccount} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome da Conta / Instituição *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Nubank Reserva, PicPay Pagamentos, Inter CDI"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Tipo de Conta
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Conta Pagamento / CDI, Conta Corrente, Investimento"
+                  value={bankAccountType}
+                  onChange={(e) => setBankAccountType(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    % do CDI
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="100"
+                      value={bankCdiRate}
+                      onChange={(e) => setBankCdiRate(e.target.value)}
+                      className="w-full px-3.5 py-2 pr-7 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100 font-mono"
+                    />
+                    <span className="absolute right-2.5 top-2.5 text-xs text-slate-400 font-bold">%</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Ex: 100% ou 105%</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Rendimento Mensal (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.85"
+                      value={bankCdiMonthlyRate}
+                      onChange={(e) => setBankCdiMonthlyRate(e.target.value)}
+                      className="w-full px-3.5 py-2 pr-7 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100 font-mono"
+                    />
+                    <span className="absolute right-2.5 top-2.5 text-xs text-slate-400 font-bold">%</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Taxa mensal manual</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Observações / Finalidade (Opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Conta de liquidez diária onde guardo dinheiro pessoal e da minha mãe."
+                  value={bankNotes}
+                  onChange={(e) => setBankNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:text-slate-100"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsBankModalOpen(false)}
+                  disabled={loadingAction}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingAction}
+                  className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingAction ? 'Salvando...' : 'Salvar Conta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: BALANCES DISTRIBUTION BY MEMBER */}
+      {isBalancesModalOpen && managingBankForBalances && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-600" />
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                    Distribuir Saldos — {managingBankForBalances.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Defina quanto do saldo desta conta pertence a cada membro da família.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBalancesModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBalances} className="p-5 space-y-4">
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                {owners.map((owner) => {
+                  const isRaf = owner.name.toLowerCase().includes('rafael')
+                  const currentVal = balancesMap[owner.id] || ''
+                  return (
+                    <div
+                      key={owner.id}
+                      className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+                        isRaf
+                          ? 'bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
+                          : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                            isRaf
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'
+                          }`}
+                        >
+                          {owner.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-slate-900 dark:text-slate-100 block truncate">
+                            {owner.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {isRaf ? 'Titular da Conta (Recebe o Rendimento)' : 'Familiar / Dependente'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="relative w-36 shrink-0">
+                        <span className="absolute left-2.5 top-2 text-xs text-slate-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0,00"
+                          value={currentVal}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setBalancesMap((prev) => ({ ...prev, [owner.id]: val }))
+                          }}
+                          className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-slate-100 font-mono font-bold text-right"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Preview dinâmico dos cálculos */}
+              {(() => {
+                let simulatedTot = 0
+                let simulatedOthers = 0
+                let simulatedOwner = 0
+
+                owners.forEach((o) => {
+                  const val = parseFloat((balancesMap[o.id] || '0').replace(',', '.')) || 0
+                  simulatedTot += val
+                  if (o.name.toLowerCase().includes('rafael')) {
+                    simulatedOwner += val
+                  } else {
+                    simulatedOthers += val
+                  }
+                })
+
+                const rate = (managingBankForBalances.cdi_monthly_rate || 0.85) / 100.0
+                const simulatedYield = simulatedTot * rate
+                const simulatedNet = simulatedOwner + simulatedYield
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-slate-900 text-white text-xs space-y-2 border border-slate-800">
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Saldo Total Digitado:</span>
+                      <b className="font-mono text-white text-sm">{formatCurrency(simulatedTot)}</b>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Saldo Pertencente aos Outros (Mãe/Família):</span>
+                      <b className="font-mono text-purple-300">{formatCurrency(simulatedOthers)}</b>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Rendimento CDI ({managingBankForBalances.cdi_monthly_rate}% a.m. fica para Rafael):</span>
+                      <b className="font-mono text-emerald-400">+{formatCurrency(simulatedYield)}/mês</b>
+                    </div>
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-emerald-300 font-bold">
+                      <span>Rafael Líquido com Rendimento:</span>
+                      <span className="font-mono text-sm">{formatCurrency(simulatedNet)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsBalancesModalOpen(false)}
+                  disabled={loadingAction}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingAction}
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingAction ? 'Salvando...' : 'Salvar Divisão de Saldos'}
                 </button>
               </div>
             </form>

@@ -63,6 +63,16 @@ async def init_db() -> None:
             except Exception as e:
                 logger.warning(f"Error checking/migrating transactions_fapp table: {e}")
 
+            # SQLite automatic migration check for fixed_cost column in type_fapp (Categories)
+            try:
+                res_cat = await conn.execute(text("PRAGMA table_info(type_fapp);"))
+                cols_cat = [row[1] for row in res_cat.fetchall()]
+                if "fixed_cost" not in cols_cat:
+                    await conn.execute(text("ALTER TABLE type_fapp ADD COLUMN fixed_cost FLOAT DEFAULT 0.0;"))
+                    logger.info("Migrated type_fapp: added fixed_cost column.")
+            except Exception as e:
+                logger.warning(f"Error checking/migrating type_fapp table: {e}")
+
     # 2. Seed initial data idempotently (only if tables are empty)
     async with AsyncSessionLocal() as session:
         # Seed Owners

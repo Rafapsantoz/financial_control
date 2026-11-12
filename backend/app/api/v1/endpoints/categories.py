@@ -37,6 +37,26 @@ async def create_category(category_in: CategoryCreate, db: AsyncSession = Depend
     return db_cat
 
 
+@router.get("/summary/fixed-costs", status_code=status.HTTP_200_OK)
+async def get_fixed_costs_summary(db: AsyncSession = Depends(get_db)):
+    """Retorna a somatória total de custos fixos cadastrados por categoria."""
+    query = select(Category).order_by(Category.id)
+    result = await db.execute(query)
+    cats = result.scalars().all()
+    total = sum(c.fixed_cost or 0.0 for c in cats)
+    categories_with_fixed = [
+        {"id": c.id, "description": c.description, "fixed_cost": c.fixed_cost or 0.0}
+        for c in cats
+        if (c.fixed_cost or 0.0) > 0
+    ]
+    return {
+        "total_fixed_cost": round(total, 2),
+        "count_with_fixed": len(categories_with_fixed),
+        "total_categories": len(cats),
+        "categories": categories_with_fixed,
+    }
+
+
 @router.get("/{id}", response_model=CategoryResponse, status_code=status.HTTP_200_OK)
 async def get_category(id: int, db: AsyncSession = Depends(get_db)):
     """Retrieve details of a category by ID."""

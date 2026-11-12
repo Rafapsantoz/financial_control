@@ -145,12 +145,30 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                 {data ? formatCurrency(data.runway.monthly_fixed_burn) : 'R$ 0,00'}
               </div>
               <p className="text-[11px] text-indigo-200/70 mt-1">
-                Gasto mensal fixo médio recorrente
+                {data && (data.categories_fixed_total || 0) > 0
+                  ? `Orçado em Categorias: ${formatCurrency(data.categories_fixed_total || 0)}/mês`
+                  : 'Gasto mensal fixo médio recorrente'}
               </p>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-              <span className="text-xs text-indigo-200">Saldo na Conta</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-indigo-200">Saldo na Conta</span>
+                {data && (data.bank_accounts_owner_balance || 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = data.bank_accounts_owner_balance || 0
+                      setBalanceInput(String(val))
+                      setAccountBalance(val)
+                    }}
+                    className="text-[10px] text-emerald-300 hover:text-emerald-200 underline cursor-pointer"
+                    title="Usar saldo próprio das contas bancárias cadastradas"
+                  >
+                    Usar Contas ({formatCurrency(data.bank_accounts_owner_balance || 0)})
+                  </button>
+                )}
+              </div>
               <form onSubmit={handleUpdateBalance} className="mt-1 flex items-center gap-1.5">
                 <input
                   type="text"
@@ -168,7 +186,9 @@ export const MacroProjectionGrid: React.FC<MacroProjectionGridProps> = ({
                 </button>
               </form>
               <p className="text-[11px] text-indigo-200/70 mt-1">
-                Ajuste para simular novos prazos
+                {data && (data.bank_accounts_yield || 0) > 0
+                  ? `+${formatCurrency(data.bank_accounts_yield || 0)}/mês de CDI retido`
+                  : 'Ajuste para simular novos prazos'}
               </p>
             </div>
           </div>

@@ -8,6 +8,7 @@ from app.models.category import Category
 from app.models.goal import Goal
 from app.models.owner import Owner
 from app.models.transaction import Transaction
+from app.models.bank_account import BankAccount, BankAccountBalance
 from app.schemas.planning import (
     FinancialPrinciple,
     FixedExpenseRow,
@@ -321,11 +322,56 @@ async def compute_macro_projection(
 
     grand_total_year = round(grand_total_year, 2)
 
-    # 8. Métrica de Sobrevivência (Runway)
+    # 8. Somatória de Custos Fixos orçados por categoria
+    categories_fixed_total = round(sum(c.fixed_cost or 0.0 for c in cats), 2)
+
+    # 9. Carregar contas bancárias e saldos para integração de caixa
+    bank_acc_stmt = select(BankAccount)
+    bank_acc_res = await db.execute(bank_acc_stmt)
+    bank_accounts = bank_acc_res.scalars().all()
+
+    bank_accounts_balance = 0.0
+    bank_accounts_owner_balance = 0.0
+    bank_accounts_yield = 0.0
+
+    for acc in bank_accounts:
+        acc_tot = 0.0
+        acc_owner = 0.0
+        for b in acc.balances:
+            val = round(b.balance or 0.0, 2)
+            acc_tot += val
+            o = owners_map.get(b.owner_id, "")
+            if "rafael" in o.lower():
+                acc_owner += val
+        rate = (acc.cdi_monthly_rate or 0.85) / 100.0
+        acc_yield = round(acc_tot * rate, 2)
+
+        bank_accounts_balance += acc_tot
+        bank_accounts_owner_balance += acc_owner
+        bank_accounts_yield += acc_yield
+
+    bank_accounts_balance = round(bank_accounts_balance, 2)
+    bank_accounts_owner_balance = round(bank_accounts_owner_balance, 2)
+    bank_accounts_yield = round(bank_accounts_yield, 2)
+
+    # Se o usuário não passou um saldo manual específico e tiver saldo em conta cadastrado, usa o saldo próprio do Rafael
+    effective_balance = account_balance
+    if effective_balance == 0.0 and bank_accounts_owner_balance > 0:
+        effective_balance = bank_accounts_owner_balance
+    elif effective_balance == 0.0 and bank_accounts_balance > 0:
+        effective_balance = bank_accounts_balance
+
+    # 10. Métrica de Sobrevivência (Runway)
     months_with_values = [col.grand_total for col in monthly_columns if col.grand_total > 0]
     if months_with_values:
         avg_burn = round(sum(months_with_values) / len(months_with_values), 2)
-        months_runway = round(account_balance / avg_burn, 1) if avg_burn > 0 else 0.0
+    elif categories_fixed_total > 0:
+        avg_burn = categories_fixed_total
+    else:
+        avg_burn = 0.0
+
+    if avg_burn > 0:
+        months_runway = round(effective_balance / avg_burn, 1)
         if months_runway >= 6.0:
             h_status = "Excelente"
             h_comment = f"Reserva robusta! Você tem {months_runway} meses de cobertura para emergências."
@@ -345,10 +391,10 @@ async def compute_macro_projection(
         avg_burn = 0.0
         months_runway = 0.0
         h_status = "Aguardando Lançamentos"
-        h_comment = "Nenhuma despesa lançada para o ano selecionado. Lance suas faturas para ativar a projeção de runway."
+        h_comment = "Nenhuma despesa lançada para o ano selecionado. Lance suas faturas ou cadastre custos fixos para ativar a projeção de runway."
 
     runway_metric = RunwayMetric(
-        account_balance=round(account_balance, 2),
+        account_balance=round(effective_balance, 2),
         monthly_fixed_burn=avg_burn,
         months_of_runway=months_runway,
         health_status=h_status,
@@ -357,7 +403,7 @@ async def compute_macro_projection(
 
     return MacroProjectionResponse(
         year=year,
-        account_balance=round(account_balance, 2),
+        account_balance=round(effective_balance, 2),
         runway=runway_metric,
         months=monthly_columns,
         fixed_expenses=fixed_rows,
@@ -365,4 +411,8 @@ async def compute_macro_projection(
         owners_matrix=owners_matrix,
         categories_matrix=categories_matrix,
         grand_total_year=grand_total_year,
+        categories_fixed_total=categories_fixed_total,
+        bank_accounts_balance=bank_accounts_balance,
+        bank_accounts_owner_balance=bank_accounts_owner_balance,
+        bank_accounts_yield=bank_accounts_yield,
     )

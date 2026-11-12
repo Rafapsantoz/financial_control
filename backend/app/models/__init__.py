@@ -4,5 +4,15 @@ from app.models.owner import Owner
 from app.models.transaction import Transaction
 from app.models.goal import Goal
 from app.models.invoice_upload import InvoiceUpload
+from app.models.bank_account import BankAccount, BankAccountBalance
 
-__all__ = ["Card", "Category", "Owner", "Transaction", "Goal", "InvoiceUpload"]
+__all__ = [
+    "Card",
+    "Category",
+    "Owner",
+    "Transaction",
+    "Goal",
+    "InvoiceUpload",
+    "BankAccount",
+    "BankAccountBalance",
+]

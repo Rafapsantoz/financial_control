@@ -18,6 +18,7 @@ export interface Card {
 export interface Category {
   id: number
   description: string
+  fixed_cost?: number
   is_active: boolean
 }
 
@@ -217,6 +218,42 @@ export interface MacroProjectionResponse {
   owners_matrix: Record<string, Record<string, number>>
   categories_matrix: Record<string, Record<string, number>>
   grand_total_year: number
+  categories_fixed_total?: number
+  bank_accounts_balance?: number
+  bank_accounts_owner_balance?: number
+  bank_accounts_yield?: number
+}
+
+// --- BANK ACCOUNTS & CDI YIELD TYPES ---
+
+export interface BankAccountBalanceItem {
+  owner_id: number
+  owner_name?: string | null
+  balance: number
+}
+
+export interface BankAccount {
+  id: number
+  name: string
+  account_type: string
+  cdi_rate: number
+  cdi_monthly_rate: number
+  notes?: string | null
+  balances: BankAccountBalanceItem[]
+  total_balance: number
+  monthly_yield: number
+  others_balance: number
+  owner_balance: number
+  net_with_yield: number
+}
+
+export interface BankAccountsSummary {
+  accounts: BankAccount[]
+  grand_total_balance: number
+  grand_total_monthly_yield: number
+  grand_total_others: number
+  grand_total_owner: number
+  grand_total_net_with_yield: number
 }
 
 export interface SplitItem {

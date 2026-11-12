@@ -88,3 +88,7 @@ class MacroProjectionResponse(BaseModel):
     owners_matrix: Dict[str, Dict[str, float]]  # owner_name -> { "01": 100, ... "total": 1200 }
     categories_matrix: Dict[str, Dict[str, float]]  # category_name -> { "01": 200, ... "total": 2400 }
     grand_total_year: float
+    categories_fixed_total: float = 0.0  # Somatória de custos fixos cadastrados por categoria
+    bank_accounts_balance: float = 0.0   # Saldo total consolidado em contas bancárias
+    bank_accounts_owner_balance: float = 0.0 # Saldo próprio do Rafael em contas
+    bank_accounts_yield: float = 0.0     # Rendimento CDI mensal estimado de todas as contas
