@@ -179,9 +179,14 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
           if (found) matchedCatId = found.id
         }
 
+        const isDuplicateItem = Boolean(it.is_duplicate || it.is_duplicate_suspect)
+
         return {
           ...it,
-          selected: true,
+          is_duplicate: isDuplicateItem,
+          is_duplicate_suspect: isDuplicateItem,
+          // Se for duplicado, vem DESMARCADO por padrão para não importar em duplicidade
+          selected: !isDuplicateItem,
           entry_type: it.entry_type || 'expense',
           targetOwnerId: matchedOwnerId,
           targetCategoryId: matchedCatId,
@@ -599,23 +604,26 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                 </div>
               </div>
 
+              {/* Duplicate Warning Banner */}
+              {editedItems.some((i) => i.is_duplicate || i.is_duplicate_suspect) && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="leading-snug">
+                    <span className="font-bold">
+                      {editedItems.filter((i) => i.is_duplicate || i.is_duplicate_suspect).length} lançamento(s) já existente(s) detectado(s):
+                    </span>{' '}
+                    Para blindar seu controle contra cobranças duplicadas, esses títulos foram desmarcados automaticamente. Caso deseje importar algum repetido mesmo assim, marque a caixa <b>"Importar mesmo assim"</b>.
+                  </div>
+                </div>
+              )}
+
               {/* Items Table */}
               <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
                 <div className="max-h-72 overflow-y-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase font-semibold sticky top-0 z-10">
                       <tr>
-                        <th className="py-2.5 px-3 w-8">
-                          <input
-                            type="checkbox"
-                            checked={editedItems.every((i) => i.selected)}
-                            onChange={(e) => {
-                              const checked = e.target.checked
-                              setEditedItems((prev) => prev.map((it) => ({ ...it, selected: checked })))
-                            }}
-                            className="rounded text-emerald-600 focus:ring-emerald-500"
-                          />
-                        </th>
+                        <th className="py-2.5 px-3 w-28 text-center">Status / Seleção</th>
                         <th className="py-2.5 px-3">Data</th>
                         <th className="py-2.5 px-3">Descrição da Compra</th>
                         <th className="py-2.5 px-3 text-center">Parcelas</th>
@@ -626,66 +634,104 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {editedItems.map((item, index) => (
-                        <tr
-                          key={index}
-                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${
-                            !item.selected
-                              ? 'opacity-40 bg-slate-50/50 dark:bg-slate-900/50'
-                              : 'bg-white dark:bg-slate-900'
-                          }`}
-                        >
-                          {/* Checkbox */}
-                          <td className="py-2.5 px-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={item.selected}
-                              onChange={(e) => {
-                                const checked = e.target.checked
-                                setEditedItems((prev) =>
-                                  prev.map((it, idx) =>
-                                    idx === index ? { ...it, selected: checked } : it
+                      {editedItems.map((item, index) => {
+                        const isDup = Boolean(item.is_duplicate || item.is_duplicate_suspect)
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors ${
+                              isDup
+                                ? item.selected
+                                  ? 'bg-amber-50/90 dark:bg-amber-950/40 border-l-4 border-l-amber-500'
+                                  : 'bg-amber-50/30 dark:bg-amber-950/20 opacity-60 hover:opacity-100 border-l-4 border-l-amber-400'
+                                : !item.selected
+                                ? 'opacity-40 bg-slate-50/50 dark:bg-slate-900/50'
+                                : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            {/* Checkbox with Duplicate label */}
+                            <td className="py-2.5 px-3 text-center">
+                              {isDup ? (
+                                <label className="inline-flex flex-col items-center gap-0.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.selected}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked
+                                      setEditedItems((prev) =>
+                                        prev.map((it, idx) =>
+                                          idx === index ? { ...it, selected: checked } : it
+                                        )
+                                      )
+                                    }}
+                                    className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                                  />
+                                  <span className="text-[9px] font-extrabold text-amber-700 dark:text-amber-300 whitespace-nowrap leading-tight">
+                                    {item.selected ? 'Importando' : 'Importar mesmo assim'}
+                                  </span>
+                                </label>
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={item.selected}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked
+                                    setEditedItems((prev) =>
+                                      prev.map((it, idx) =>
+                                        idx === index ? { ...it, selected: checked } : it
+                                      )
+                                    )
+                                  }}
+                                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                />
+                              )}
+                            </td>
+
+                            {/* Date */}
+                            <td className="py-2 px-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                              <input
+                                type="date"
+                                value={item.purchase_date}
+                                onChange={(e) => {
+                                  const newDate = e.target.value
+                                  setEditedItems((prev) =>
+                                    prev.map((it, idx) => (idx === index ? { ...it, purchase_date: newDate } : it))
                                   )
-                                )
-                              }}
-                              className="rounded text-emerald-600 focus:ring-emerald-500"
-                            />
-                          </td>
+                                }}
+                                className="px-1.5 py-0.5 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-800 bg-transparent text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+                              />
+                            </td>
 
-                          {/* Date */}
-                          <td className="py-2 px-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
-                            <input
-                              type="date"
-                              value={item.purchase_date}
-                              onChange={(e) => {
-                                const newDate = e.target.value
-                                setEditedItems((prev) =>
-                                  prev.map((it, idx) => (idx === index ? { ...it, purchase_date: newDate } : it))
-                                )
-                              }}
-                              className="px-1.5 py-0.5 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-800 bg-transparent text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
-                            />
-                          </td>
+                            {/* Description */}
+                            <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 max-w-[220px]">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="truncate" title={item.description}>
+                                    {item.description}
+                                  </span>
+                                  {isDup && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                      ⚠️ Já Importado
+                                    </span>
+                                  )}
+                                </div>
+                                {isDup && item.duplicate_reason && (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 leading-tight block">
+                                    {item.duplicate_reason}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
 
-                          {/* Description */}
-                          <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 max-w-[200px] truncate">
-                            {item.description}
-                            {item.is_duplicate_suspect && (
-                              <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                                Duplicata?
-                              </span>
-                            )}
-                          </td>
+                            {/* Installments */}
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300">
+                              {item.current_installment}/{item.total_installments}
+                            </td>
 
-                          {/* Installments */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300">
-                            {item.current_installment}/{item.total_installments}
-                          </td>
-
-                          {/* Amount */}
-                          <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">
-                            {formatCurrency(item.amount)}
-                          </td>
+                            {/* Amount */}
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-slate-900 dark:text-slate-100 font-mono">
+                              {formatCurrency(item.amount)}
+                            </td>
 
                           {/* Tipo: Despesa vs Receita */}
                           <td className="py-2.5 px-3 text-center whitespace-nowrap">
@@ -755,17 +801,30 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                             </select>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      )
+                    })}
+                  </tbody>
+                </table>
                 </div>
               </div>
 
               {/* Bottom Actions */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {editedItems.filter((i) => i.selected).length} de {editedItems.length} compras
-                  selecionadas para salvar
+                  <b className="text-slate-800 dark:text-slate-200">
+                    {editedItems.filter((i) => i.selected).length}
+                  </b>{' '}
+                  de {editedItems.length} compras selecionadas para salvar
+                  {editedItems.some((i) => (i.is_duplicate || i.is_duplicate_suspect) && !i.selected) && (
+                    <span className="text-amber-600 dark:text-amber-400 font-bold ml-1.5 inline-flex items-center gap-1">
+                      (
+                      {
+                        editedItems.filter((i) => (i.is_duplicate || i.is_duplicate_suspect) && !i.selected)
+                          .length
+                      }{' '}
+                      duplicada(s) protegida(s) e ignorada(s))
+                    </span>
+                  )}
                 </p>
 
                 <div className="flex items-center gap-2.5">

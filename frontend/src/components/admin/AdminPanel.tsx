@@ -42,6 +42,7 @@ import {
   deleteBankAccount,
   deleteCard,
   deleteCategory,
+  deleteInvoiceUpload,
   deleteOwner,
   fetchBankAccountsSummary,
   fetchInvoiceUploads,
@@ -69,6 +70,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'bank_accounts' | 'uploads'>('owners')
   const [invoiceUploads, setInvoiceUploads] = useState<InvoiceUpload[]>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
+  const [uploadToDelete, setUploadToDelete] = useState<InvoiceUpload | null>(null)
+  const [deleteTransactionsWithUpload, setDeleteTransactionsWithUpload] = useState<boolean>(true)
+  const [isDeletingUpload, setIsDeletingUpload] = useState<boolean>(false)
 
   // Bank Accounts & CDI Yield State
   const [bankSummary, setBankSummary] = useState<BankAccountsSummary | null>(null)
@@ -95,6 +99,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       console.error('Erro ao buscar histórico de uploads:', err)
     } finally {
       setLoadingUploads(false)
+    }
+  }
+
+  const handleConfirmDeleteUpload = async () => {
+    if (!uploadToDelete) return
+    try {
+      setIsDeletingUpload(true)
+      clearFeedback()
+      const res = await deleteInvoiceUpload(uploadToDelete.id, deleteTransactionsWithUpload)
+      setSuccessMsg(
+        `${res.detail} (${res.deleted_transactions_count} transação(ões) correspondente(s) removida(s) no mês ${uploadToDelete.target_month})`
+      )
+      setUploadToDelete(null)
+      await loadUploadsHistory()
+      await onRefreshMasters()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao excluir registro de fatura.')
+    } finally {
+      setIsDeletingUpload(false)
     }
   }
 
@@ -1194,13 +1217,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <thead className="bg-slate-100/80 dark:bg-slate-800">
                   <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
                     <th className="py-3 px-4 w-12">ID</th>
-                    <th className="py-3 px-4">Arquivo PDF</th>
+                    <th className="py-3 px-4">Arquivo PDF / Imagem</th>
                     <th className="py-3 px-4">Emissor / Cartão</th>
                     <th className="py-3 px-4">Mês Competência</th>
                     <th className="py-3 px-4 text-center">Compras</th>
                     <th className="py-3 px-4 text-right">Valor Total</th>
                     <th className="py-3 px-4">Data do Upload</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1235,7 +1259,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <td className="py-3 px-4 text-center font-bold text-slate-800 dark:text-slate-200">
                           {up.items_count}
                         </td>
-                        <td className="py-3 px-4 text-right font-extrabold text-emerald-700 dark:text-emerald-400 text-sm">
+                        <td className="py-3 px-4 text-right font-extrabold text-emerald-700 dark:text-emerald-400 text-sm font-mono">
                           {formatCurrency(up.total_amount)}
                         </td>
                         <td className="py-3 px-4 text-slate-500 text-[11px]">
@@ -1246,6 +1270,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <ShieldCheck className="w-3 h-3" />
                             Protegida
                           </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              setUploadToDelete(up)
+                              setDeleteTransactionsWithUpload(true)
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Excluir fatura para permitir reimportação limpa"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     )
@@ -1751,6 +1787,84 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: DELETE INVOICE UPLOAD & ALLOW RE-IMPORT */}
+      {uploadToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 pb-4 flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  Excluir Fatura e Liberar Reimportação?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Esta ação removerá a blindagem de hash SHA-256 permitindo que este arquivo seja reimportado novamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUploadToDelete(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-3 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100">
+                  <span className="truncate max-w-[240px]">{uploadToDelete.filename}</span>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(uploadToDelete.total_amount)}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <span>Mês: <b>{formatMonthName(uploadToDelete.target_month)}</b></span>
+                  <span>Compras: <b>{uploadToDelete.items_count}</b></span>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteTransactionsWithUpload}
+                  onChange={(e) => setDeleteTransactionsWithUpload(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 mt-0.5"
+                />
+                <div className="text-xs text-amber-900 dark:text-amber-200">
+                  <span className="font-bold block">Excluir também as transações geradas no mês</span>
+                  <span className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                    Recomendado: limpa os lançamentos desse cartão no mês de {formatMonthName(uploadToDelete.target_month)} para evitar títulos duplicados ao reimportar.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setUploadToDelete(null)}
+                disabled={isDeletingUpload}
+                className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUpload}
+                disabled={isDeletingUpload}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingUpload ? 'Excluindo...' : 'Excluir e Permitir Reimportação'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

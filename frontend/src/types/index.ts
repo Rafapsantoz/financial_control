@@ -83,7 +83,9 @@ export interface ExtractedInvoiceItem {
   category_id?: number | null
   suggested_owner?: string | null
   owner_id?: number | null
+  is_duplicate?: boolean
   is_duplicate_suspect?: boolean
+  duplicate_reason?: string | null
   entry_type?: 'expense' | 'income'
 }
 

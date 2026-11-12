@@ -230,11 +230,16 @@ async def check_duplicate_transaction(
     amount: float,
     description: str,
     card_id: Optional[int] = None,
-) -> bool:
+    target_month: Optional[str] = None,
+) -> tuple[bool, Optional[str]]:
     """
     Implements Business Rule RN02 (Invoice Duplicate Prevention).
     Verifies if a transaction with matching date, amount, and description already exists in transactions_fapp.
+    Returns (is_duplicate, reason_message).
     """
+    norm_target_desc = normalize_text(description)
+    target_value = round(abs(float(amount)), 2)
+
     try:
         clean_date = purchase_date.strip()
         if len(clean_date) >= 10:
@@ -244,9 +249,9 @@ async def check_duplicate_transaction(
             start_dt = datetime(year, month, day, 0, 0, 0, tzinfo=timezone.utc)
             end_dt = datetime(year, month, day, 23, 59, 59, 999999, tzinfo=timezone.utc)
         else:
-            return False
+            return False, None
     except Exception:
-        return False
+        return False, None
 
     query = select(Transaction).where(
         Transaction.dt_lcto >= start_dt,
@@ -259,15 +264,16 @@ async def check_duplicate_transaction(
     result = await db.execute(query)
     existing_transactions = result.scalars().all()
 
-    norm_target_desc = normalize_text(description)
-    target_value = round(abs(float(amount)), 2)
-
     for tx in existing_transactions:
         if abs(round(tx.value, 2) - target_value) < 0.01:
-            if normalize_text(tx.description) == norm_target_desc:
-                return True
+            norm_db_desc = normalize_text(tx.description)
+            if norm_db_desc == norm_target_desc or (
+                len(norm_target_desc) >= 6 and (norm_target_desc in norm_db_desc or norm_db_desc in norm_target_desc)
+            ):
+                dt_str = tx.dt_lcto.strftime("%d/%m/%Y") if tx.dt_lcto else (tx.invoice_month or "")
+                return True, f"Já cadastrado no sistema (ID #{tx.id} em {dt_str} - R$ {tx.value:.2f})"
 
-    return False
+    return False, None
 
 
 def add_months(dt: datetime, n: int) -> datetime:
@@ -399,6 +405,7 @@ async def extract_invoice_from_pdf(
     categories_by_norm = {normalize_text(c.description): c for c in categories}
 
     # 4. Enrich each item
+    seen_batch_items: set[str] = set()
     for item in extracted.items:
         # Installment decomposition
         cur, tot = decompose_installments(
@@ -431,14 +438,26 @@ async def extract_invoice_from_pdf(
         item.card_id = resolved_card_id
 
         # Duplicate check (RN02)
-        is_dup = await check_duplicate_transaction(
+        is_dup, dup_reason = await check_duplicate_transaction(
             db=db,
             purchase_date=item.purchase_date,
             amount=item.amount,
             description=item.description,
             card_id=resolved_card_id,
+            target_month=extracted.invoice_month_year,
         )
+
+        # Checagem de duplicidade intra-lote (se enviou 2 fotos com o mesmo lançamento repetido)
+        item_date_str = (item.purchase_date or "").strip()
+        item_key = f"{item_date_str}_{normalize_text(item.description)}_{round(abs(float(item.amount)), 2)}"
+        if not is_dup and item_key in seen_batch_items:
+            is_dup = True
+            dup_reason = "Título duplicado detectado entre as imagens/prints enviados no mesmo lote"
+        seen_batch_items.add(item_key)
+
         item.is_duplicate = is_dup
+        item.is_duplicate_suspect = is_dup
+        item.duplicate_reason = dup_reason
 
     # 5. Consolidate total invoice amount
     if extracted.total_invoice_amount <= 0.0 and extracted.items:

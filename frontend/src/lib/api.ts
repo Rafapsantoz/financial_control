@@ -317,6 +317,20 @@ export async function fetchInvoiceUploads(): Promise<InvoiceUpload[]> {
   return res.json()
 }
 
+export async function deleteInvoiceUpload(
+  id: number,
+  deleteTransactions = true
+): Promise<{ detail: string; upload_id: number; deleted_transactions_count: number }> {
+  const res = await fetch(`${BASE_URL}/invoices/uploads/${id}?delete_transactions=${deleteTransactions}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao excluir registro de fatura' }))
+    throw new Error(err.detail || 'Falha ao excluir fatura importada')
+  }
+  return res.json()
+}
+
 // --- PLANNING & SPREADSHEET PROJECTION API ---
 
 export async function fetchMacroProjection(

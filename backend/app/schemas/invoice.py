@@ -20,6 +20,8 @@ class ExtractedInvoiceItem(BaseModel):
     category_id: Optional[int] = Field(default=None, description="ID da categoria resolvida no banco de dados")
     card_id: Optional[int] = Field(default=None, description="ID do cartão associado")
     is_duplicate: bool = Field(default=False, description="Indica se a transação já foi previamente lançada no sistema (RN02)")
+    is_duplicate_suspect: bool = Field(default=False, description="Alias para indicar suspeita de duplicata")
+    duplicate_reason: Optional[str] = Field(default=None, description="Motivo ou dados do lançamento existente que causou o aviso")
     entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
 
     @field_validator("amount", mode="after")

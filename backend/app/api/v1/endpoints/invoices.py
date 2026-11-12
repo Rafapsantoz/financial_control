@@ -257,3 +257,47 @@ async def list_invoice_uploads(
         select(InvoiceUpload).order_by(InvoiceUpload.uploaded_at.desc())
     )
     return res.scalars().all()
+
+
+@router.delete(
+    "/uploads/{id}",
+    status_code=status.HTTP_200_OK,
+    summary="Excluir registro de fatura importada para permitir reimportação limpa",
+)
+async def delete_invoice_upload(
+    id: int,
+    delete_transactions: bool = Query(True, description="Se verdadeiro, remove também as transações geradas por esta importação"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Remove o registro da fatura importada, liberando a assinatura de hash SHA-256 para
+    permitir que o arquivo seja reimportado sem aviso de duplicidade.
+    Opcionalmente exclui as transações importadas correspondentes para evitar duplicidades no saldo.
+    """
+    upload = await db.get(InvoiceUpload, id)
+    if not upload:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Upload de fatura com ID {id} não encontrado.",
+        )
+
+    deleted_tx_count = 0
+    if delete_transactions:
+        from sqlalchemy import delete
+        from app.models.transaction import Transaction
+
+        # Localiza e remove transações com este mês e cartão
+        del_stmt = delete(Transaction).where(Transaction.invoice_month == upload.target_month)
+        if upload.card_id:
+            del_stmt = del_stmt.where(Transaction.card_id == upload.card_id)
+        res_del = await db.execute(del_stmt)
+        deleted_tx_count = res_del.rowcount or 0
+
+    await db.delete(upload)
+    await db.commit()
+
+    return {
+        "detail": f"Fatura '{upload.filename}' removida com sucesso. Assinatura SHA-256 liberada para reimportação.",
+        "upload_id": id,
+        "deleted_transactions_count": deleted_tx_count,
+    }
