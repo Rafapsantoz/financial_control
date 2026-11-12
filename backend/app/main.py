@@ -90,6 +90,15 @@ async def root(request: Request):
     }
 
 
+@app.get("/manifest.json", tags=["PWA"])
+async def manifest():
+    """Returns the web app manifest for Mobile PWA installation."""
+    manifest_file = os.path.join(FRONTEND_DIST, "manifest.json")
+    if os.path.exists(manifest_file):
+        return FileResponse(manifest_file, media_type="application/manifest+json")
+    return JSONResponse(status_code=404, content={"detail": "Manifest not found"})
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Lightweight health check endpoint for monitoring."""

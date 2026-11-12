@@ -12,6 +12,7 @@ import { AdminPanel } from './components/admin/AdminPanel'
 import { MacroProjectionGrid } from './components/planning/MacroProjectionGrid'
 import { BudgetAnalysisTab } from './components/planning/BudgetAnalysisTab'
 import { ConfirmDeleteModal } from './components/common/ConfirmDeleteModal'
+import { MobileCompanion } from './components/mobile/MobileCompanion'
 import { formatCurrency, formatDate, formatMonthName } from './lib/formatters'
 import {
   createTransaction,
@@ -34,6 +35,27 @@ export function App() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
   const [forecastFilter, setForecastFilter] = useState<'all' | 'effective' | 'forecast'>('all')
   const [currentView, setCurrentView] = useState<'dashboard' | 'macro' | 'budget' | 'admin'>('dashboard')
+
+  // Mobile Viewport & Companion Management
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  })
+  const [forceDesktopView, setForceDesktopView] = useState<boolean>(() => {
+    return localStorage.getItem('fo_force_desktop') === 'true'
+  })
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth < 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const handleToggleDesktopView = (force: boolean) => {
+    setForceDesktopView(force)
+    localStorage.setItem('fo_force_desktop', force ? 'true' : 'false')
+  }
 
   useEffect(() => {
     localStorage.setItem('fo_current_month', currentMonth)
@@ -235,8 +257,102 @@ export function App() {
       ? `Consolidado (${activeCardNames.join(', ')})`
       : cards[0]?.card_name || 'Cartão de Crédito'
 
+  // Render Mobile Companion View when on small screens and not forcing desktop
+  if (isMobileViewport && !forceDesktopView) {
+    return (
+      <div className="selection:bg-emerald-500 selection:text-white">
+        <MobileCompanion
+          currentMonth={currentMonth}
+          onMonthChange={(m) => setCurrentMonth(m)}
+          summary={summary}
+          transactions={transactions}
+          owners={owners}
+          cards={cards}
+          categories={categories}
+          onTogglePaid={handleTogglePaid}
+          onDeleteTransaction={handleDeleteTransaction}
+          onEditTransaction={(tx) => setEditingTransaction(tx)}
+          onAddTransaction={handleAddTransaction}
+          onOpenUploadModal={() => setIsUploadModalOpen(true)}
+          onRefresh={() => loadMonthData(currentMonth)}
+          isLoading={isLoading}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onSwitchToDesktop={() => handleToggleDesktopView(true)}
+        />
+
+        {/* Global Modals for Mobile Companion */}
+        <EditTransactionModal
+          isOpen={!!editingTransaction}
+          transaction={editingTransaction}
+          onClose={() => setEditingTransaction(null)}
+          onSave={handleSaveEditedTransaction}
+          onSuccessRefresh={() => loadMonthData(currentMonth)}
+          owners={owners}
+          cards={cards}
+          categories={categories}
+        />
+
+        <InvoiceUploaderModal
+          isOpen={isUploadModalOpen}
+          onClose={() => {
+            setIsUploadModalOpen(false)
+            setPastedFilesForModal([])
+          }}
+          onSuccess={handleInvoiceUploadSuccess}
+          owners={owners}
+          cards={cards}
+          categories={categories}
+          currentMonth={currentMonth}
+          initialFiles={pastedFilesForModal}
+        />
+
+        <ConfirmDeleteModal
+          isOpen={Boolean(txToDelete)}
+          title="Excluir Transação da Fatura?"
+          subtitle="Esta ação removerá este lançamento do rateio familiar e recalculará os totais."
+          warningText="O valor será subtraído da fatura deste mês."
+          confirmButtonText="Sim, Excluir Transação"
+          isDeleting={isDeletingTx}
+          onClose={() => setTxToDelete(null)}
+          onConfirm={handleConfirmDeleteTransaction}
+        >
+          {txToDelete && (
+            <div className="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                  {txToDelete.description}
+                </h4>
+                <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 shrink-0">
+                  {formatCurrency(txToDelete.value)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span>Data: <b className="text-slate-700 dark:text-slate-300">{formatDate(txToDelete.dt_lcto)}</b></span>
+                <span>Parcela: <b className="text-slate-700 dark:text-slate-300">{txToDelete.cur_parcs}/{txToDelete.total_parcs}</b></span>
+              </div>
+            </div>
+          )}
+        </ConfirmDeleteModal>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+      {/* Banner de Retorno ao Modo Mobile (quando forçado pelo usuário em tela pequena) */}
+      {forceDesktopView && isMobileViewport && (
+        <div className="bg-indigo-600 text-white text-xs py-1.5 px-4 text-center font-bold flex items-center justify-center gap-2 sticky top-0 z-50">
+          <span>Modo Desktop Completo Ativo</span>
+          <button
+            onClick={() => handleToggleDesktopView(false)}
+            className="bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded-lg cursor-pointer transition-colors"
+          >
+            Voltar para Modo Bolso Mobile 📱
+          </button>
+        </div>
+      )}
+
       {/* Top Navigation */}
       <Header
         currentMonth={currentMonth}
