@@ -634,3 +634,16 @@ async def replicate_installments(
         await db.refresh(item)
 
     return created_installments
+
+
+@router.post("/project-all-installments", status_code=status.HTTP_200_OK)
+async def project_all_installments(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Audits all installment transactions across the system and automatically
+    generates all missing past and future installments with zero duplicates.
+    """
+    from app.services.gemini_service import project_missing_installments_service
+
+    return await project_missing_installments_service(db)

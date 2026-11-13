@@ -187,6 +187,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
           is_duplicate_suspect: isDuplicateItem,
           // Se for duplicado, vem DESMARCADO por padrão para não importar em duplicidade
           selected: !isDuplicateItem,
+          project_installments: (it.total_installments || 1) > 1,
           entry_type: it.entry_type || 'expense',
           targetOwnerId: matchedOwnerId,
           targetCategoryId: matchedCatId,
@@ -216,7 +217,8 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
       const payload = {
         card_id: extractedData?.card_id || selectedCardId,
         target_month: finalMonth,
-        project_future_installments: false,
+        project_all_installments: true,
+        project_future_installments: true,
         file_hash: extractedData?.file_hash || undefined,
         filename: files.map((f) => f.name).join(', ') || undefined,
         bank_or_issuer: extractedData?.bank_or_issuer || undefined,
@@ -229,6 +231,7 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
           type_id: item.targetCategoryId,
           cur_parcs: item.current_installment,
           total_parcs: item.total_installments,
+          project_installments: item.project_installments !== false,
           is_paid: false,
           entry_type: item.entry_type || 'expense',
           comment: `Extraído via IA (${extractedData?.bank_or_issuer || 'Cartão'})`,
@@ -723,9 +726,32 @@ export const InvoiceUploaderModal: React.FC<InvoiceUploaderModalProps> = ({
                               </div>
                             </td>
 
-                            {/* Installments */}
-                            <td className="py-2.5 px-3 text-center whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300">
-                              {item.current_installment}/{item.total_installments}
+                            {/* Installments & Auto-Replication Checkbox */}
+                            <td className="py-2 px-3 text-center whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="font-mono text-xs">{item.current_installment}/{item.total_installments}</span>
+                                {item.total_installments > 1 && (
+                                  <label
+                                    className="inline-flex items-center gap-1 cursor-pointer text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                                    title="Lançar automaticamente parcelas anteriores e futuras caso não existam"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={item.project_installments !== false}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked
+                                        setEditedItems((prev) =>
+                                          prev.map((it, idx) =>
+                                            idx === index ? { ...it, project_installments: checked } : it
+                                          )
+                                        )
+                                      }}
+                                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <span>Replicar</span>
+                                  </label>
+                                )}
+                              </div>
                             </td>
 
                             {/* Amount */}

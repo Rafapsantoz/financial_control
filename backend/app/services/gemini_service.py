@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.gemini import call_gemini_structured_extraction
@@ -298,6 +298,32 @@ def add_months_to_str(month_str: str, n: int) -> str:
         return month_str
 
 
+def update_installment_description(desc: str, cur_p: int, total_p: int, new_p: int) -> str:
+    """
+    Updates the installment tag in description if present.
+    Examples:
+    - PARC01/04 -> PARC02/04
+    - Parcela 1/10 -> Parcela 2/10
+    - Parc. 01/03 -> Parc. 02/03
+    """
+    m = re.search(r"PARC\s*0?(\d+)\s*/\s*0?(\d+)", desc, re.IGNORECASE)
+    if m:
+        digits_p = len(m.group(1))
+        digits_tot = len(m.group(2))
+        pad = max(digits_p, digits_tot, 2)
+        new_tag = f"PARC{new_p:0{pad}d}/{total_p:0{pad}d}"
+        return desc[: m.start()] + new_tag + desc[m.end() :]
+    m2 = re.search(r"Parcela\s*(\d+)\s*/\s*(\d+)", desc, re.IGNORECASE)
+    if m2:
+        new_tag = f"Parcela {new_p}/{total_p}"
+        return desc[: m2.start()] + new_tag + desc[m2.end() :]
+    m3 = re.search(r"Parc\.?\s*(\d+)\s*/\s*(\d+)", desc, re.IGNORECASE)
+    if m3:
+        new_tag = f"Parc. {new_p}/{total_p}"
+        return desc[: m3.start()] + new_tag + desc[m3.end() :]
+    return desc
+
+
 async def extract_invoice_from_pdf(
     db: AsyncSession,
     pdf_bytes: bytes,
@@ -564,33 +590,68 @@ async def confirm_invoice_transactions(
         )
         transactions_to_create.append(primary_tx)
 
-        # Projections for future installments (RN01) if enabled
-        if request.project_future_installments and item.total_parcs > item.cur_parcs:
-            for p in range(item.cur_parcs + 1, item.total_parcs + 1):
-                future_dt = add_months(tx_dt, p - item.cur_parcs)
-                future_inv_month = (
-                    add_months_to_str(eff_invoice_month, p - item.cur_parcs)
+        # Projections for installments (RN01) - Generates previous and/or future missing installments
+        project_all = request.project_all_installments is True and getattr(item, "project_installments", True)
+        project_future_only = request.project_future_installments and (request.project_all_installments is not True)
+
+        if (project_all or project_future_only) and item.total_parcs > 1:
+            p_range = range(1, item.total_parcs + 1) if project_all else range(item.cur_parcs + 1, item.total_parcs + 1)
+            for p in p_range:
+                if p == item.cur_parcs:
+                    continue
+                diff = p - item.cur_parcs
+                target_dt = add_months(tx_dt, diff)
+                target_inv_month = (
+                    add_months_to_str(eff_invoice_month, diff)
                     if eff_invoice_month
-                    else future_dt.strftime("%Y-%m")
+                    else target_dt.strftime("%Y-%m")
                 )
+
+                # Check if this installment already exists in DB for this owner, installment index and month
+                existing_check = await db.execute(
+                    select(Transaction.id).where(
+                        Transaction.owner_id == item.owner_id,
+                        Transaction.cur_parcs == p,
+                        Transaction.total_parcs == item.total_parcs,
+                        Transaction.invoice_month == target_inv_month,
+                        func.abs(Transaction.value - item.value) < 0.01,
+                    )
+                )
+                if existing_check.scalar_one_or_none() is not None:
+                    continue
+
+                # Check if already generated in current batch
+                already_in_batch = any(
+                    t.owner_id == item.owner_id
+                    and t.cur_parcs == p
+                    and t.total_parcs == item.total_parcs
+                    and t.invoice_month == target_inv_month
+                    and abs(t.value - item.value) < 0.01
+                    for t in transactions_to_create
+                )
+                if already_in_batch:
+                    continue
+
+                proj_desc = update_installment_description(item.description, item.cur_parcs, item.total_parcs, p)
+                is_future = target_inv_month >= (request.target_month or "2026-11")
                 proj_comment = (
-                    f"{tx_comment} (Projeção {p}/{item.total_parcs})"
+                    f"{tx_comment} (Parcela {p}/{item.total_parcs})"
                     if tx_comment
                     else f"Parcela projetada automaticamente ({p}/{item.total_parcs})"
                 )
                 proj_tx = Transaction(
-                    dt_lcto=future_dt,
-                    description=item.description,
+                    dt_lcto=target_dt,
+                    description=proj_desc,
                     value=item.value,
                     owner_id=item.owner_id,
                     card_id=eff_card_id,
                     type_id=eff_type_id,
                     total_parcs=item.total_parcs,
                     cur_parcs=p,
-                    is_paid=False,
-                    is_forecast=True,
+                    is_paid=False if is_future else True,
+                    is_forecast=is_future,
                     entry_type=getattr(item, "entry_type", "expense") or "expense",
-                    invoice_month=future_inv_month,
+                    invoice_month=target_inv_month,
                     comment=proj_comment,
                 )
                 transactions_to_create.append(proj_tx)
@@ -611,3 +672,82 @@ async def confirm_invoice_transactions(
         created_transactions=pydantic_responses,
         message=f"{len(transactions_to_create)} transações confirmadas e salvas com sucesso.",
     )
+
+
+async def project_missing_installments_service(db: AsyncSession) -> dict:
+    """
+    Scans all existing transactions with total_parcs > 1,
+    identifies missing installments (both past and future),
+    and creates them in the database without duplicates.
+    """
+    res = await db.execute(
+        select(Transaction).where(Transaction.total_parcs > 1).order_by(Transaction.id.asc())
+    )
+    all_parcs = res.scalars().all()
+
+    existing_rows = await db.execute(
+        select(
+            Transaction.owner_id,
+            Transaction.cur_parcs,
+            Transaction.total_parcs,
+            Transaction.invoice_month,
+            Transaction.value,
+        )
+    )
+    existing_keys = {
+        (r[0], r[1], r[2], r[3], round(float(r[4]), 2))
+        for r in existing_rows.all()
+    }
+
+    created: List[Transaction] = []
+    current_ref_month = datetime.now().strftime("%Y-%m")
+
+    for tx in all_parcs:
+        if not tx.invoice_month or tx.total_parcs <= 1:
+            continue
+
+        base_dt = tx.dt_lcto or datetime.now()
+
+        for p in range(1, tx.total_parcs + 1):
+            if p == tx.cur_parcs:
+                continue
+            diff = p - tx.cur_parcs
+            target_inv_month = add_months_to_str(tx.invoice_month, diff)
+            target_dt = add_months(base_dt, diff)
+
+            check_key = (tx.owner_id, p, tx.total_parcs, target_inv_month, round(float(tx.value), 2))
+            if check_key in existing_keys:
+                continue
+
+            existing_keys.add(check_key)
+            new_desc = update_installment_description(tx.description, tx.cur_parcs, tx.total_parcs, p)
+            is_future = target_inv_month >= current_ref_month
+
+            new_tx = Transaction(
+                dt_lcto=target_dt,
+                description=new_desc,
+                value=tx.value,
+                owner_id=tx.owner_id,
+                card_id=tx.card_id,
+                type_id=tx.type_id,
+                total_parcs=tx.total_parcs,
+                cur_parcs=p,
+                is_paid=False if is_future else True,
+                is_forecast=is_future,
+                entry_type=tx.entry_type or "expense",
+                invoice_month=target_inv_month,
+                comment=f"Parcela gerada automaticamente ({p}/{tx.total_parcs})",
+            )
+            created.append(new_tx)
+
+    if created:
+        db.add_all(created)
+        await db.commit()
+        for t in created:
+            await db.refresh(t)
+
+    return {
+        "status": "success",
+        "created_count": len(created),
+        "message": f"{len(created)} parcelas anteriores e futuras geradas com sucesso.",
+    }

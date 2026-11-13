@@ -310,9 +310,9 @@ export const MobileCompanion: React.FC<MobileCompanionProps> = ({
         {/* ================= TAB 1: DASHBOARD INICIAL ================= */}
         {mobileTab === 'dashboard' && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            {/* HERO CARD: SALDO LIVRE / BALANÇO INDIVIDUAL */}
+            {/* QUADRADO MAIOR: SALDO LIVRE / BALANÇO INDIVIDUAL */}
             <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-indigo-900/40 relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 rounded-full bg-emerald-500/10 blur-2xl" />
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 rounded-full bg-indigo-500/10 blur-2xl" />
 
               <div className="flex items-center justify-between text-xs text-indigo-200/80 mb-1">
                 <span className="font-semibold uppercase tracking-wider text-[10px]">
@@ -323,60 +323,70 @@ export const MobileCompanion: React.FC<MobileCompanionProps> = ({
                 </span>
               </div>
 
-              {/* Saldo Líquido ou Total de Gastos */}
-              <div className="my-2">
-                {myTotalIncome > 0 ? (
-                  <>
-                    <span className="text-xs text-slate-400 block font-medium">
-                      {myNetBalance >= 0 ? 'Saldo Livre Disponível' : 'Déficit no Mês'}
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className={`text-3xl font-black font-mono tracking-tight ${
-                          myNetBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {myNetBalance >= 0
-                          ? `+ ${formatCurrency(myNetBalance)}`
-                          : formatCurrency(Math.abs(myNetBalance))}
-                      </span>
-                      {myNetBalance < 0 && (
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                          Acima da Renda
-                        </span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-indigo-200/80 block font-medium">
-                      Total de Gastos no Mês
-                    </span>
-                    <div className="text-3xl font-black font-mono tracking-tight text-white">
-                      {formatCurrency(myTotalExpenses)}
-                    </div>
-                  </>
-                )}
+              {/* Saldo Líquido do Mês (Entradas - Saídas) */}
+              <div className="my-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-medium">Saldo Livre Previsto</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      myNetBalance >= 0
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    }`}
+                  >
+                    {myNetBalance >= 0 ? 'Positivo' : 'Déficit no Mês'}
+                  </span>
+                </div>
+                <div
+                  className={`text-3xl sm:text-4xl font-black font-mono tracking-tight mt-1 ${
+                    myNetBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {formatCurrency(myNetBalance)}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5 font-normal">
+                  Cálculo: Entradas ({formatCurrency(myTotalIncome)}) - Saídas ({formatCurrency(myTotalExpenses)})
+                </p>
               </div>
+            </div>
 
-              {/* Entradas vs Saídas */}
-              <div className="grid grid-cols-2 gap-2.5 pt-3 mt-3 border-t border-white/10">
-                <div className="bg-white/5 rounded-xl p-2.5">
-                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold mb-0.5">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>Entradas</span>
+            {/* DOIS QUADRADOS MENORES: RECEITA E DESPESA SEPARADOS */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Card Menor 1: Receitas */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4" />
                   </div>
-                  <span className="text-sm font-extrabold font-mono text-slate-100">
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                    Entradas
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">
+                    Total Receitas
+                  </span>
+                  <span className="text-base sm:text-lg font-mono font-black text-emerald-600 dark:text-emerald-400 truncate block mt-0.5">
                     {formatCurrency(myTotalIncome)}
                   </span>
                 </div>
+              </div>
 
-                <div className="bg-white/5 rounded-xl p-2.5">
-                  <div className="flex items-center gap-1.5 text-rose-400 text-xs font-bold mb-0.5">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>Saídas</span>
+              {/* Card Menor 2: Despesas */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4" />
                   </div>
-                  <span className="text-sm font-extrabold font-mono text-slate-100">
+                  <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 px-1.5 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                    Saídas
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">
+                    Total Despesas
+                  </span>
+                  <span className="text-base sm:text-lg font-mono font-black text-rose-600 dark:text-rose-400 truncate block mt-0.5">
                     {formatCurrency(myTotalExpenses)}
                   </span>
                 </div>

@@ -87,6 +87,7 @@ export interface ExtractedInvoiceItem {
   is_duplicate_suspect?: boolean
   duplicate_reason?: string | null
   entry_type?: 'expense' | 'income'
+  project_installments?: boolean
 }
 
 export interface ExtractedInvoiceResponse {
@@ -118,12 +119,14 @@ export interface InvoiceConfirmItem {
   entry_type?: 'expense' | 'income'
   invoice_month?: string | null
   comment?: string | null
+  project_installments?: boolean
 }
 
 export interface InvoiceConfirmRequest {
   card_id?: number | null
   target_month?: string | null
   project_future_installments?: boolean
+  project_all_installments?: boolean
   file_hash?: string | null
   filename?: string | null
   bank_or_issuer?: string | null

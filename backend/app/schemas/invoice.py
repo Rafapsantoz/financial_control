@@ -23,6 +23,7 @@ class ExtractedInvoiceItem(BaseModel):
     is_duplicate_suspect: bool = Field(default=False, description="Alias para indicar suspeita de duplicata")
     duplicate_reason: Optional[str] = Field(default=None, description="Motivo ou dados do lançamento existente que causou o aviso")
     entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
+    project_installments: bool = Field(default=True, description="Flag padrão marcada para replicar parcelas anteriores e futuras")
 
     @field_validator("amount", mode="after")
     @classmethod
@@ -67,6 +68,7 @@ class InvoiceConfirmItem(BaseModel):
     is_paid: bool = Field(default=False, description="Status de quitação da dívida pelo responsável")
     is_forecast: bool = Field(default=False, description="Indica se é parcela projetada para faturas futuras")
     entry_type: str = Field(default="expense", description="'expense' (Despesa) ou 'income' (Receita)")
+    project_installments: bool = Field(default=True, description="Se True e total_parcs > 1, gera automaticamente parcelas anteriores e futuras não existentes")
 
     @field_validator("description", mode="after")
     @classmethod
@@ -130,6 +132,10 @@ class InvoiceConfirmRequest(BaseModel):
     project_future_installments: bool = Field(
         default=False,
         description="Se True, gera previsões de parcelas futuras (is_forecast=True) para compras parceladas",
+    )
+    project_all_installments: Optional[bool] = Field(
+        default=None,
+        description="Se True, gera automaticamente parcelas anteriores e futuras não existentes para itens parcelados",
     )
     file_hash: Optional[str] = Field(default=None, description="Hash SHA-256 do arquivo original para prevenção de duplicidade")
     filename: Optional[str] = Field(default=None, description="Nome do arquivo PDF original enviado")
