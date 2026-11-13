@@ -5,6 +5,7 @@ from app.models.transaction import Transaction
 from app.models.goal import Goal
 from app.models.invoice_upload import InvoiceUpload
 from app.models.bank_account import BankAccount, BankAccountBalance
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "Card",
@@ -15,4 +16,5 @@ __all__ = [
     "InvoiceUpload",
     "BankAccount",
     "BankAccountBalance",
+    "AuditLog",
 ]

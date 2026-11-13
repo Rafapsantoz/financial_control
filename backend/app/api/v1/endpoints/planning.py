@@ -13,6 +13,7 @@ from app.schemas.planning import (
     LivingScenario,
     MacroProjectionResponse,
 )
+from app.services.audit_service import record_audit_log, serialize_data
 from app.services.planning_service import (
     SPREADSHEET_PRINCIPLES,
     SPREADSHEET_SCENARIOS,
@@ -64,9 +65,20 @@ async def list_goals(db: AsyncSession = Depends(get_db)):
     summary="Cadastrar nova meta financeira ou item da wishlist",
 )
 async def create_goal(goal_in: GoalCreate, db: AsyncSession = Depends(get_db)):
-    """Cria uma nova meta (ex: Cortina, Mesa, Robô aspirador)."""
+    """Cria uma nova meta (ex: Cortina, Mesa, Robô aspirador) com log de auditoria."""
     goal = Goal(**goal_in.model_dump())
     db.add(goal)
+    await db.flush()
+
+    await record_audit_log(
+        db=db,
+        action="CREATE",
+        entity_type="GOAL",
+        entity_id=goal.id,
+        description=f"Meta/Wishlist '{goal.title}' criada (Alvo: R$ {goal.target_amount or 0:.2f})",
+        new_values=goal,
+    )
+
     await db.commit()
     await db.refresh(goal)
     return goal
@@ -79,7 +91,7 @@ async def create_goal(goal_in: GoalCreate, db: AsyncSession = Depends(get_db)):
     summary="Atualizar meta financeira existente",
 )
 async def update_goal(id: int, goal_in: GoalUpdate, db: AsyncSession = Depends(get_db)):
-    """Atualiza progresso, valor ou status de conclusão de uma meta."""
+    """Atualiza progresso, valor ou status de conclusão de uma meta com log de auditoria."""
     goal = await db.get(Goal, id)
     if not goal:
         raise HTTPException(
@@ -87,9 +99,21 @@ async def update_goal(id: int, goal_in: GoalUpdate, db: AsyncSession = Depends(g
             detail=f"Meta com ID {id} não encontrada.",
         )
 
+    old_snapshot = serialize_data(goal)
+
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(goal, field, value)
+
+    await record_audit_log(
+        db=db,
+        action="UPDATE",
+        entity_type="GOAL",
+        entity_id=goal.id,
+        description=f"Meta/Wishlist #{goal.id} '{goal.title}' alterada (Status: {'Concluído' if goal.is_completed else 'Pendente'})",
+        old_values=old_snapshot,
+        new_values=goal,
+    )
 
     await db.commit()
     await db.refresh(goal)
@@ -102,13 +126,24 @@ async def update_goal(id: int, goal_in: GoalUpdate, db: AsyncSession = Depends(g
     summary="Remover meta financeira",
 )
 async def delete_goal(id: int, db: AsyncSession = Depends(get_db)):
-    """Exclui uma meta financeira."""
+    """Exclui uma meta financeira preservando snapshot no log de auditoria."""
     goal = await db.get(Goal, id)
     if not goal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Meta com ID {id} não encontrada.",
         )
+
+    old_snapshot = serialize_data(goal)
+    await record_audit_log(
+        db=db,
+        action="DELETE",
+        entity_type="GOAL",
+        entity_id=id,
+        description=f"Meta/Wishlist #{id} '{goal.title}' excluída",
+        old_values=old_snapshot,
+    )
+
     await db.delete(goal)
     await db.commit()
     return {"detail": f"Meta {id} removida com sucesso."}

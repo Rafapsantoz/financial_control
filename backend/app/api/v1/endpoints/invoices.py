@@ -14,6 +14,7 @@ from app.schemas.invoice import (
     InvoiceConfirmResponse,
     InvoiceUploadResponse,
 )
+from app.services.audit_service import record_audit_log, serialize_data
 from app.services.gemini_service import (
     confirm_invoice_transactions,
     extract_invoice_from_pdf,
@@ -218,10 +219,12 @@ async def confirm_invoice(
     result = await confirm_invoice_transactions(db=db, request=payload)
 
     # Register or update invoice import record
+    upload_id = None
     if existing_upload:
         existing_upload.total_amount = result.total_amount
         existing_upload.items_count = result.confirmed_count
         existing_upload.uploaded_at = datetime.now(timezone.utc)
+        upload_id = existing_upload.id
     else:
         upload_record = InvoiceUpload(
             file_hash=file_hash,
@@ -235,6 +238,24 @@ async def confirm_invoice(
             status="CONFIRMED",
         )
         db.add(upload_record)
+        await db.flush()
+        upload_id = upload_record.id
+
+    await record_audit_log(
+        db=db,
+        action="IMPORT",
+        entity_type="INVOICE",
+        entity_id=upload_id,
+        description=f"Fatura '{payload.filename}' confirmada: {result.confirmed_count} transações no valor de R$ {result.total_amount:.2f} ({payload.bank_or_issuer or 'Emissor'})",
+        new_values={
+            "filename": payload.filename,
+            "file_hash": payload.file_hash,
+            "target_month": payload.target_month,
+            "card_id": payload.card_id,
+            "total_amount": result.total_amount,
+            "confirmed_count": result.confirmed_count,
+        },
+    )
 
     await db.commit()
 
@@ -292,6 +313,16 @@ async def delete_invoice_upload(
             del_stmt = del_stmt.where(Transaction.card_id == upload.card_id)
         res_del = await db.execute(del_stmt)
         deleted_tx_count = res_del.rowcount or 0
+
+    old_snapshot = serialize_data(upload)
+    await record_audit_log(
+        db=db,
+        action="DELETE",
+        entity_type="INVOICE",
+        entity_id=id,
+        description=f"Fatura importada #{id} '{upload.filename}' excluída ({deleted_tx_count} transações removidas)",
+        old_values=old_snapshot,
+    )
 
     await db.delete(upload)
     await db.commit()

@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
+from app.services.audit_service import record_audit_log, serialize_data
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(category_in: CategoryCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new expense category with uniqueness check."""
+    """Create a new expense category with uniqueness check and audit logging."""
     query = select(Category).where(func.lower(Category.description) == func.lower(category_in.description))
     result = await db.execute(query)
     if result.scalar_one_or_none():
@@ -32,6 +33,17 @@ async def create_category(category_in: CategoryCreate, db: AsyncSession = Depend
 
     db_cat = Category(**category_in.model_dump())
     db.add(db_cat)
+    await db.flush()
+
+    await record_audit_log(
+        db=db,
+        action="CREATE",
+        entity_type="CATEGORY",
+        entity_id=db_cat.id,
+        description=f"Categoria '{db_cat.description}' criada (Custo Fixo: R$ {db_cat.fixed_cost or 0:.2f})",
+        new_values=db_cat,
+    )
+
     await db.commit()
     await db.refresh(db_cat)
     return db_cat
@@ -71,7 +83,7 @@ async def get_category(id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{id}", response_model=CategoryResponse, status_code=status.HTTP_200_OK)
 async def update_category(id: int, category_in: CategoryUpdate, db: AsyncSession = Depends(get_db)):
-    """Update category description."""
+    """Update category description with audit logging."""
     cat = await db.get(Category, id)
     if not cat:
         raise HTTPException(
@@ -91,9 +103,21 @@ async def update_category(id: int, category_in: CategoryUpdate, db: AsyncSession
                 detail=f"Outra categoria com a descrição '{category_in.description}' já existe.",
             )
 
+    old_snapshot = serialize_data(cat)
+
     update_data = category_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(cat, field, value)
+
+    await record_audit_log(
+        db=db,
+        action="UPDATE",
+        entity_type="CATEGORY",
+        entity_id=cat.id,
+        description=f"Categoria #{cat.id} '{cat.description}' alterada",
+        old_values=old_snapshot,
+        new_values=cat,
+    )
 
     await db.commit()
     await db.refresh(cat)
@@ -102,7 +126,7 @@ async def update_category(id: int, category_in: CategoryUpdate, db: AsyncSession
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
 async def delete_category(id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a category if no transactions are linked."""
+    """Delete a category if no transactions are linked, preserving full audit snapshot."""
     cat = await db.get(Category, id)
     if not cat:
         raise HTTPException(
@@ -117,6 +141,16 @@ async def delete_category(id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Não é possível excluir a categoria: existem {tx_count} transações vinculadas a ela.",
         )
+
+    old_snapshot = serialize_data(cat)
+    await record_audit_log(
+        db=db,
+        action="DELETE",
+        entity_type="CATEGORY",
+        entity_id=id,
+        description=f"Categoria #{id} '{cat.description}' excluída",
+        old_values=old_snapshot,
+    )
 
     await db.delete(cat)
     await db.commit()

@@ -24,8 +24,12 @@ import {
   Sparkles,
   ArrowRight,
   Info,
+  History,
+  Copy,
+  Eye,
 } from 'lucide-react'
 import {
+  AuditLog,
   BankAccount,
   BankAccountBalanceItem,
   BankAccountsSummary,
@@ -44,6 +48,7 @@ import {
   deleteCategory,
   deleteInvoiceUpload,
   deleteOwner,
+  fetchAuditLogs,
   fetchBankAccountsSummary,
   fetchInvoiceUploads,
   updateBankAccount,
@@ -68,9 +73,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   categories,
   onRefreshMasters,
 }) => {
-  const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'bank_accounts' | 'uploads'>('owners')
+  const [activeTab, setActiveTab] = useState<'owners' | 'cards' | 'categories' | 'bank_accounts' | 'uploads' | 'audit_logs'>('owners')
   const [invoiceUploads, setInvoiceUploads] = useState<InvoiceUpload[]>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [totalAuditLogs, setTotalAuditLogs] = useState<number>(0)
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState<boolean>(false)
+  const [auditFilterAction, setAuditFilterAction] = useState<string>('ALL')
+  const [auditFilterEntity, setAuditFilterEntity] = useState<string>('ALL')
+  const [auditSearch, setAuditSearch] = useState<string>('')
+  const [selectedAuditDetail, setSelectedAuditDetail] = useState<AuditLog | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
   // Unified Delete Modals State
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
@@ -154,10 +169,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }
 
-  // Carrega contagens de faturas e contas bancárias imediatamente no mount para que as abas não fiquem zeradas (0)
+  const loadAuditLogs = async (overrideAction?: string, overrideEntity?: string, overrideSearch?: string) => {
+    try {
+      setLoadingAuditLogs(true)
+      const actionParam = overrideAction !== undefined ? overrideAction : auditFilterAction
+      const entityParam = overrideEntity !== undefined ? overrideEntity : auditFilterEntity
+      const searchParam = overrideSearch !== undefined ? overrideSearch : auditSearch
+
+      const data = await fetchAuditLogs({
+        action: actionParam !== 'ALL' ? actionParam : undefined,
+        entity_type: entityParam !== 'ALL' ? entityParam : undefined,
+        search: searchParam.trim() || undefined,
+        limit: 100,
+        skip: 0,
+      })
+      setAuditLogs(data.items)
+      setTotalAuditLogs(data.total)
+    } catch (err: any) {
+      console.error('Erro ao buscar logs de auditoria:', err)
+    } finally {
+      setLoadingAuditLogs(false)
+    }
+  }
+
+  // Carrega contagens de faturas, contas bancárias e logs imediatamente no mount para que as abas não fiquem zeradas (0)
   useEffect(() => {
     loadUploadsHistory()
     loadBankSummary()
+    loadAuditLogs()
   }, [])
 
   useEffect(() => {
@@ -165,6 +204,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       loadUploadsHistory()
     } else if (activeTab === 'bank_accounts') {
       loadBankSummary()
+    } else if (activeTab === 'audit_logs') {
+      loadAuditLogs()
     }
   }, [activeTab])
 
@@ -592,6 +633,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span>Nova Conta Bancária</span>
             </button>
           )}
+          {activeTab === 'audit_logs' && (
+            <button
+              onClick={() => loadAuditLogs()}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm transition-all active:scale-95"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? 'animate-spin' : ''}`} />
+              <span>Atualizar Logs</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -695,6 +745,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         >
           <ShieldCheck className="w-4 h-4" />
           <span>Faturas Importadas & Duplicidades ({invoiceUploads.length})</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('audit_logs')
+            clearFeedback()
+          }}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+            activeTab === 'audit_logs'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          <span>Auditoria & Logs ({totalAuditLogs})</span>
         </button>
       </div>
 
@@ -1330,6 +1395,202 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: AUDIT LOGS */}
+      {activeTab === 'audit_logs' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          {/* Header & Filter Controls */}
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                  Auditoria e Histórico de Operações
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Rastreabilidade total: toda inclusão, alteração e exclusão é registrada com snapshot completo de dados para proteção contra perdas.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Filtro de Ação */}
+              <select
+                value={auditFilterAction}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setAuditFilterAction(val)
+                  loadAuditLogs(val, undefined, undefined)
+                }}
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+              >
+                <option value="ALL">Todas as Ações</option>
+                <option value="CREATE">Inclusões (CREATE)</option>
+                <option value="UPDATE">Alterações (UPDATE)</option>
+                <option value="DELETE">Exclusões (DELETE)</option>
+                <option value="SETTLE">Quitações (SETTLE)</option>
+                <option value="SPLIT">Rateios (SPLIT)</option>
+                <option value="IMPORT">Importações (IMPORT)</option>
+              </select>
+
+              {/* Filtro de Entidade */}
+              <select
+                value={auditFilterEntity}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setAuditFilterEntity(val)
+                  loadAuditLogs(undefined, val, undefined)
+                }}
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+              >
+                <option value="ALL">Todas as Entidades</option>
+                <option value="TRANSACTION">Transações</option>
+                <option value="OWNER">Participantes</option>
+                <option value="CARD">Cartões</option>
+                <option value="CATEGORY">Categorias</option>
+                <option value="GOAL">Metas / Wishlist</option>
+                <option value="BANK_ACCOUNT">Contas Bancárias</option>
+                <option value="INVOICE">Faturas</option>
+              </select>
+
+              {/* Busca Textual */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar no log..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      loadAuditLogs(undefined, undefined, auditSearch)
+                    }
+                  }}
+                  className="pl-3 pr-8 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none w-36 sm:w-48"
+                />
+                {auditSearch && (
+                  <button
+                    onClick={() => {
+                      setAuditSearch('')
+                      loadAuditLogs(undefined, undefined, '')
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Botão Atualizar */}
+              <button
+                onClick={() => loadAuditLogs()}
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer"
+                title="Atualizar registros de log"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            {auditLogs.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Nenhum registro de log encontrado para os filtros selecionados.
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-100/80 dark:bg-slate-800">
+                  <tr className="border-b border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-4 w-12">ID</th>
+                    <th className="py-3 px-4 w-36">Data / Hora</th>
+                    <th className="py-3 px-4 w-28 text-center">Ação</th>
+                    <th className="py-3 px-4 w-32">Entidade</th>
+                    <th className="py-3 px-4">Descrição da Operação</th>
+                    <th className="py-3 px-4 w-24">Autor</th>
+                    <th className="py-3 px-4 w-24 text-right">Snapshot</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {auditLogs.map((log) => {
+                    let actionBadge = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                    if (log.action === 'CREATE') {
+                      actionBadge = 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    } else if (log.action === 'UPDATE') {
+                      actionBadge = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                    } else if (log.action === 'DELETE') {
+                      actionBadge = 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                    } else if (log.action === 'SETTLE') {
+                      actionBadge = 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
+                    } else if (log.action === 'SPLIT') {
+                      actionBadge = 'bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800'
+                    } else if (log.action === 'IMPORT') {
+                      actionBadge = 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                    }
+
+                    const entityLabels: Record<string, string> = {
+                      TRANSACTION: 'Transação',
+                      OWNER: 'Participante',
+                      CARD: 'Cartão',
+                      CATEGORY: 'Categoria',
+                      GOAL: 'Meta / Wishlist',
+                      BANK_ACCOUNT: 'Conta Bancária',
+                      INVOICE: 'Fatura',
+                    }
+
+                    const hasData = Boolean(log.old_values || log.new_values)
+
+                    return (
+                      <tr
+                        key={log.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                          #{log.id}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300 text-[11px] whitespace-nowrap font-mono">
+                          {formatDate(log.created_at)}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${actionBadge}`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                          {entityLabels[log.entity_type] || log.entity_type}
+                          {log.entity_id ? ` #${log.entity_id}` : ''}
+                        </td>
+                        <td className="py-3 px-4 text-slate-900 dark:text-slate-100 text-xs font-medium">
+                          {log.description}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-[11px]">
+                          {log.actor || 'Usuário'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {hasData ? (
+                            <button
+                              onClick={() => {
+                                setSelectedAuditDetail(log)
+                                setCopyFeedback(null)
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer"
+                              title="Ver dados gravados / snapshot da operação"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Ver Dados</span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600 text-[10px]">—</span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -2047,6 +2308,103 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         )}
       </ConfirmDeleteModal>
+
+      {/* MODAL: AUDIT LOG SNAPSHOT DETAILS */}
+      {selectedAuditDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  Registro de Auditoria #{selectedAuditDetail.id}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Operação {selectedAuditDetail.action} em {selectedAuditDetail.entity_type} • {formatDate(selectedAuditDetail.created_at)}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedAuditDetail(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto text-xs">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">
+                  Descrição
+                </span>
+                <p className="font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedAuditDetail.description}
+                </p>
+              </div>
+
+              {/* Dados Anteriores (Snapshot de Exclusão ou Antes de Alterar) */}
+              {selectedAuditDetail.old_values && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      Dados Anteriores / Registro Excluído (Snapshot Preservado)
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(selectedAuditDetail.old_values, null, 2))
+                        setCopyFeedback('Copiado!')
+                        setTimeout(() => setCopyFeedback(null), 2000)
+                      }}
+                      className="text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copyFeedback || 'Copiar JSON'}</span>
+                    </button>
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-slate-200 rounded-xl font-mono text-[11px] overflow-x-auto border border-slate-800 max-h-48 leading-relaxed">
+                    {JSON.stringify(selectedAuditDetail.old_values, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Novos Dados Gravados */}
+              {selectedAuditDetail.new_values && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      Novos Dados Gravados
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(selectedAuditDetail.new_values, null, 2))
+                        setCopyFeedback('Copiado!')
+                        setTimeout(() => setCopyFeedback(null), 2000)
+                      }}
+                      className="text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copyFeedback || 'Copiar JSON'}</span>
+                    </button>
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-slate-200 rounded-xl font-mono text-[11px] overflow-x-auto border border-slate-800 max-h-48 leading-relaxed">
+                    {JSON.stringify(selectedAuditDetail.new_values, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+              <button
+                onClick={() => setSelectedAuditDetail(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl text-white bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     dashboard,
     planning,
     bank_accounts,
+    audit_logs,
 )
 
 api_router = APIRouter()
@@ -20,3 +21,4 @@ api_router.include_router(invoices.router, prefix="/invoices", tags=["Invoices"]
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 api_router.include_router(planning.router, prefix="/planning", tags=["Planning"])
 api_router.include_router(bank_accounts.router, prefix="/bank-accounts", tags=["Bank Accounts"])
+api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["Audit Logs"])

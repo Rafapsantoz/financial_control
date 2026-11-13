@@ -1,4 +1,6 @@
 import {
+  AuditLog,
+  AuditLogListResponse,
   BankAccount,
   BankAccountBalanceItem,
   BankAccountsSummary,
@@ -513,5 +515,38 @@ export async function fetchFixedCostsSummary(): Promise<{
 }> {
   const res = await fetch(`${BASE_URL}/categories/summary/fixed-costs`)
   if (!res.ok) throw new Error('Falha ao buscar resumo de custos fixos')
+  return res.json()
+}
+
+// --- AUDIT LOGS API ---
+
+export async function fetchAuditLogs(params?: {
+  entity_type?: string
+  action?: string
+  entity_id?: number
+  search?: string
+  skip?: number
+  limit?: number
+}): Promise<AuditLogListResponse> {
+  const q = new URLSearchParams()
+  if (params?.entity_type) q.append('entity_type', params.entity_type)
+  if (params?.action) q.append('action', params.action)
+  if (params?.entity_id !== undefined && params.entity_id !== null) q.append('entity_id', String(params.entity_id))
+  if (params?.search) q.append('search', params.search)
+  if (params?.skip !== undefined) q.append('skip', String(params.skip))
+  if (params?.limit !== undefined) q.append('limit', String(params.limit))
+
+  const res = await fetch(`${BASE_URL}/audit-logs?${q.toString()}`)
+  if (!res.ok) throw new Error('Falha ao buscar logs de auditoria')
+  return res.json()
+}
+
+export async function fetchAuditStats(): Promise<{
+  total_logs: number
+  by_action: Record<string, number>
+  by_entity: Record<string, number>
+}> {
+  const res = await fetch(`${BASE_URL}/audit-logs/stats`)
+  if (!res.ok) throw new Error('Falha ao buscar estatísticas de auditoria')
   return res.json()
 }

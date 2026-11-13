@@ -13,6 +13,7 @@ from app.schemas.owner import (
     OwnerSettleRequest,
     OwnerSettleResponse,
 )
+from app.services.audit_service import record_audit_log, serialize_data
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ async def list_owners(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=OwnerResponse, status_code=status.HTTP_201_CREATED)
 async def create_owner(owner_in: OwnerCreate, db: AsyncSession = Depends(get_db)):
-    """Register a new owner with unique name validation."""
+    """Register a new owner with unique name validation and audit logging."""
     query = select(Owner).where(func.lower(Owner.name) == func.lower(owner_in.name))
     result = await db.execute(query)
     if result.scalar_one_or_none():
@@ -38,6 +39,17 @@ async def create_owner(owner_in: OwnerCreate, db: AsyncSession = Depends(get_db)
 
     db_owner = Owner(**owner_in.model_dump())
     db.add(db_owner)
+    await db.flush()
+
+    await record_audit_log(
+        db=db,
+        action="CREATE",
+        entity_type="OWNER",
+        entity_id=db_owner.id,
+        description=f"Participante '{db_owner.name}' cadastrado ({db_owner.category or 'Familiar'})",
+        new_values=db_owner,
+    )
+
     await db.commit()
     await db.refresh(db_owner)
     return db_owner
@@ -57,7 +69,7 @@ async def get_owner(id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{id}", response_model=OwnerResponse, status_code=status.HTTP_200_OK)
 async def update_owner(id: int, owner_in: OwnerUpdate, db: AsyncSession = Depends(get_db)):
-    """Update owner information."""
+    """Update owner information with audit logging."""
     owner = await db.get(Owner, id)
     if not owner:
         raise HTTPException(
@@ -74,9 +86,21 @@ async def update_owner(id: int, owner_in: OwnerUpdate, db: AsyncSession = Depend
                 detail=f"Outro proprietário com o nome '{owner_in.name}' já existe.",
             )
 
+    old_snapshot = serialize_data(owner)
+
     update_data = owner_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(owner, field, value)
+
+    await record_audit_log(
+        db=db,
+        action="UPDATE",
+        entity_type="OWNER",
+        entity_id=owner.id,
+        description=f"Participante #{owner.id} '{owner.name}' alterado",
+        old_values=old_snapshot,
+        new_values=owner,
+    )
 
     await db.commit()
     await db.refresh(owner)
@@ -85,7 +109,7 @@ async def update_owner(id: int, owner_in: OwnerUpdate, db: AsyncSession = Depend
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
 async def delete_owner(id: int, db: AsyncSession = Depends(get_db)):
-    """Delete an owner if no active transactions are associated."""
+    """Delete an owner if no active transactions are associated, preserving audit snapshot."""
     owner = await db.get(Owner, id)
     if not owner:
         raise HTTPException(
@@ -101,6 +125,16 @@ async def delete_owner(id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Não é possível excluir o proprietário: existem {tx_count} transações vinculadas a ele.",
         )
+
+    old_snapshot = serialize_data(owner)
+    await record_audit_log(
+        db=db,
+        action="DELETE",
+        entity_type="OWNER",
+        entity_id=id,
+        description=f"Participante #{id} '{owner.name}' excluído",
+        old_values=old_snapshot,
+    )
 
     await db.delete(owner)
     await db.commit()
@@ -118,6 +152,7 @@ async def settle_owner_debt(
     Allocates payment_amount across pending transactions. Smaller/older debts are
     cleared first. If a payment only partially covers a transaction, it splits
     it into a fully paid portion and a remaining pending portion.
+    Logs audit entry so payment history is never lost.
     """
     owner = await db.get(Owner, id)
     if not owner:
@@ -148,6 +183,7 @@ async def settle_owner_debt(
     remaining = round(payload.payment_amount, 2)
     fully_settled = 0
     partially_settled = 0
+    settled_tx_ids = []
 
     for tx in pending_txs:
         if remaining <= 0:
@@ -158,6 +194,7 @@ async def settle_owner_debt(
             tx.is_paid = True
             remaining = round(remaining - tx_val, 2)
             fully_settled += 1
+            settled_tx_ids.append(tx.id)
         else:
             # Partial abatement: split tx into paid portion and remaining debt
             paid_portion = remaining
@@ -167,6 +204,7 @@ async def settle_owner_debt(
             tx.value = paid_portion
             tx.is_paid = True
             tx.comment = f"{tx.comment or ''} [Quitado R$ {paid_portion:.2f} do total de R$ {tx_val:.2f}]".strip()
+            settled_tx_ids.append(tx.id)
 
             # Create remaining debt as a new pending transaction
             rem_tx = Transaction(
@@ -188,6 +226,25 @@ async def settle_owner_debt(
             remaining = 0.0
             break
 
+    # Record Audit Log for debt settlement
+    settled_total = round(payload.payment_amount - remaining, 2)
+    await record_audit_log(
+        db=db,
+        action="SETTLE",
+        entity_type="OWNER",
+        entity_id=id,
+        description=f"Quitação de dívidas de {owner.name} no mês {payload.month}: valor pago R$ {settled_total:.2f} ({fully_settled} integral, {partially_settled} parcial)",
+        new_values={
+            "owner_id": id,
+            "owner_name": owner.name,
+            "month": payload.month,
+            "paid_amount": settled_total,
+            "fully_settled_count": fully_settled,
+            "partially_settled_count": partially_settled,
+            "settled_tx_ids": settled_tx_ids,
+        },
+    )
+
     await db.commit()
 
     # Calculate remaining debt for this owner after settlement (effective debts only)
@@ -207,7 +264,7 @@ async def settle_owner_debt(
 
     return OwnerSettleResponse(
         owner_id=id,
-        settled_amount=round(payload.payment_amount - remaining, 2),
+        settled_amount=settled_total,
         fully_settled_count=fully_settled,
         partially_settled_count=partially_settled,
         remaining_pending=total_remaining_pending,

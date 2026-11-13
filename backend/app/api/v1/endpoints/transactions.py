@@ -21,6 +21,7 @@ from app.schemas.transaction import (
     TransactionSplitRequest,
     ReplicateInstallmentsRequest,
 )
+from app.services.audit_service import record_audit_log, serialize_data
 
 router = APIRouter()
 
@@ -130,6 +131,17 @@ async def create_transaction(
 
     db_tx = Transaction(**tx_dict)
     db.add(db_tx)
+    await db.flush()
+
+    await record_audit_log(
+        db=db,
+        action="CREATE",
+        entity_type="TRANSACTION",
+        entity_id=db_tx.id,
+        description=f"Transação '{db_tx.description}' cadastrada (R$ {db_tx.value:.2f}, Parcela {db_tx.cur_parcs}/{db_tx.total_parcs})",
+        new_values=db_tx,
+    )
+
     await db.commit()
     await db.refresh(db_tx)
     return db_tx
@@ -419,9 +431,21 @@ async def update_transaction(
             detail=f"A parcela atual ({effective_cur}) não pode ser maior que o total de parcelas ({effective_total}).",
         )
 
+    old_snapshot = serialize_data(tx)
+
     update_data = tx_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(tx, field, value)
+
+    await record_audit_log(
+        db=db,
+        action="UPDATE",
+        entity_type="TRANSACTION",
+        entity_id=tx.id,
+        description=f"Transação #{tx.id} '{tx.description}' alterada",
+        old_values=old_snapshot,
+        new_values=tx,
+    )
 
     await db.commit()
     await db.refresh(tx)
@@ -430,13 +454,23 @@ async def update_transaction(
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
 async def delete_transaction(id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a transaction by ID."""
+    """Delete a transaction by ID, preserving full audit snapshot."""
     tx = await db.get(Transaction, id)
     if not tx:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Transação com ID {id} não encontrada.",
         )
+
+    old_snapshot = serialize_data(tx)
+    await record_audit_log(
+        db=db,
+        action="DELETE",
+        entity_type="TRANSACTION",
+        entity_id=id,
+        description=f"Transação #{id} '{tx.description}' (R$ {tx.value:.2f}, Mês {tx.invoice_month}) excluída",
+        old_values=old_snapshot,
+    )
 
     await db.delete(tx)
     await db.commit()
@@ -447,7 +481,7 @@ async def delete_transaction(id: int, db: AsyncSession = Depends(get_db)):
 async def toggle_paid_status(id: int, db: AsyncSession = Depends(get_db)):
     """
     Toggle payment status (is_paid) for a specific transaction.
-    Implements Rule RN03 (Independent Payment Status).
+    Implements Rule RN03 (Independent Payment Status) with audit logging.
     """
     tx = await db.get(Transaction, id)
     if not tx:
@@ -456,7 +490,19 @@ async def toggle_paid_status(id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Transação com ID {id} não encontrada.",
         )
 
+    old_snapshot = serialize_data(tx)
     tx.is_paid = not tx.is_paid
+
+    await record_audit_log(
+        db=db,
+        action="UPDATE",
+        entity_type="TRANSACTION",
+        entity_id=tx.id,
+        description=f"Quitação da transação #{tx.id} ('{tx.description}') alterada para {'Pago' if tx.is_paid else 'Pendente'}",
+        old_values=old_snapshot,
+        new_values=tx,
+    )
+
     await db.commit()
     await db.refresh(tx)
     return tx
@@ -497,6 +543,7 @@ async def split_transaction(
                 detail=f"Proprietário com ID {s.owner_id} (fatia {idx+1}) não existe.",
             )
 
+    old_snapshot = serialize_data(tx)
     result_txs: List[Transaction] = []
     base_comment = tx.comment or ""
 
@@ -531,6 +578,16 @@ async def split_transaction(
         )
         db.add(sib_tx)
         result_txs.append(sib_tx)
+
+    await record_audit_log(
+        db=db,
+        action="SPLIT",
+        entity_type="TRANSACTION",
+        entity_id=id,
+        description=f"Transação #{id} '{tx.description}' (R$ {original_val:.2f}) dividida/rateada em {len(payload.splits)} partes",
+        old_values=old_snapshot,
+        new_values=[serialize_data(item) for item in result_txs],
+    )
 
     await db.commit()
     for item in result_txs:
@@ -628,6 +685,16 @@ async def replicate_installments(
         )
         db.add(new_inst)
         created_installments.append(new_inst)
+
+    if created_installments:
+        await record_audit_log(
+            db=db,
+            action="CREATE",
+            entity_type="TRANSACTION",
+            entity_id=id,
+            description=f"Replicadas {len(created_installments)} parcelas da transação #{id} '{tx.description}'",
+            new_values={"parent_id": id, "created_installments_count": len(created_installments)},
+        )
 
     await db.commit()
     for item in created_installments:

@@ -290,3 +290,21 @@ export interface OwnerSettleResponse {
   remaining_pending: number
   message: string
 }
+
+export interface AuditLog {
+  id: number
+  created_at: string
+  entity_type: string
+  entity_id?: number | null
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'SETTLE' | 'SPLIT' | 'IMPORT' | string
+  description: string
+  old_values?: Record<string, any> | null
+  new_values?: Record<string, any> | null
+  actor: string
+  ip_address?: string | null
+}
+
+export interface AuditLogListResponse {
+  total: number
+  items: AuditLog[]
+}
